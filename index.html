@@ -67,8 +67,8 @@
 
         // Cannon.jsの物理ワールドを作成
         const world = new CANNON.World();
-        // 重力を設定（視認性のため少し強めに設定）
-        world.gravity.set(0, -30, 0);
+        // 重力を設定（地球標準の値に戻す）
+        world.gravity.set(0, -9.82, 0);
 
         // パフォーマンス改善：動きの少ない物体の物理計算を休止させる機能を有効化
         world.allowSleep = true;
