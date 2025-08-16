@@ -29,6 +29,20 @@
             font-size: 16px;
             cursor: pointer;
         }
+
+        .sim-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .sim-controls button {
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -39,6 +53,13 @@
 
     <!-- ボールを打ち上げるためのボタン -->
     <button id="launchButton">ボールを落とす</button>
+    <!-- シミュレーション制御ボタン -->
+    <div class="sim-controls">
+        <button id="playBtn">再生</button>
+        <button id="pauseBtn">停止</button>
+        <button id="resetBtn">リセット</button>
+        <button id="resetViewBtn">視点リセット</button>
+    </div>
 
     <!-- ES Moduleのimportmapを使用してライブラリを読み込む -->
     <script type="importmap">
@@ -57,6 +78,7 @@
         //==================================================
         import * as THREE from 'three';
         import * as CANNON from 'cannon-es';
+        import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 
         //==================================================
         // 初期化処理
@@ -81,9 +103,9 @@
         const aspect = window.innerWidth / window.innerHeight;
         const frustumSize = 20;
         const camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 0.1, 1000);
-        // カメラをX軸プラス方向の真横に配置（真横視点）
-        camera.position.set(30, 0, 0);
-        // カメラの注視点を原点に設定（真横から原点を見る）
+        // 斜め上から見下ろす位置にカメラを配置
+        camera.position.set(20, 12, 20);
+        // カメラの注視点を原点に設定（斜め上から原点を見る）
         camera.lookAt(0, 0, 0);
 
 
@@ -97,6 +119,17 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
 
+        // カメラ操作用コントロール（ドラッグで視点移動）
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.07;
+        controls.enablePan = true;
+        controls.target.set(0, 0, 0);
+
+        // 初期視点を保存（リセット用）
+        const initialCameraPos = camera.position.clone();
+        const initialTarget = controls.target.clone();
+
 
         //==================================================
         // 光源の設定
@@ -108,16 +141,57 @@
         directionalLight.position.set(30, 10, 0);
         scene.add(directionalLight);
 
+        // 軸ヘルパーとラベルを追加（X:赤, Y:緑, Z:青）
+        const axesHelper = new THREE.AxesHelper(5);
+        // 小さくして画面左下付近に配置（カメラが +X 側にあるため Z+ が画面左）
+        axesHelper.scale.set(0.6, 0.6, 0.6);
+        axesHelper.position.set(0, -4, 5);
+        scene.add(axesHelper);
+
+        // ラベル用の簡易スプライトを作る関数
+        function makeLabelSprite(text, bgColor) {
+            const size = 128;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            // 背景を描く（円）
+            ctx.fillStyle = bgColor;
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+            ctx.fill();
+            // 文字を描く
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 72px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, size / 2 + 4);
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+            const sprite = new THREE.Sprite(mat);
+            // 小さめに表示
+            sprite.scale.set(0.6, 0.6, 1);
+            return sprite;
+        }
+
+        const labelX = makeLabelSprite('X', '#ff0000');
+        labelX.position.set(2, -4, 5); // 左下付近のXラベル
+        scene.add(labelX);
+
+        const labelY = makeLabelSprite('Y', '#00aa00');
+        labelY.position.set(0, -2, 5); // 左下付近のYラベル
+        scene.add(labelY);
+
+        const labelZ = makeLabelSprite('Z', '#0000ff');
+        labelZ.position.set(0, -4, 7); // 左下付近のZラベル
+        scene.add(labelZ);
+
 
         //==================================================
         // 物理マテリアルの設定
         //==================================================
         const sphereMaterialCannon = new CANNON.Material('sphere');
-        const wallMaterialCannon = new CANNON.Material('wall');
 
-        // 壁とボールの接触挙動
-        const wallContactMaterial = new CANNON.ContactMaterial(wallMaterialCannon, sphereMaterialCannon, { friction: 0.3, restitution: 0.6 });
-        world.addContactMaterial(wallContactMaterial);
 
         // （釘は削除されたため、ここに追加の接触材はありません）
 
@@ -127,22 +201,7 @@
         //==================================================
         const objectsToUpdate = [];
 
-        //--- 壁 (Wall) ---
-        // 物理的な壁（盤面）を定義
-        const wallBody = new CANNON.Body({ mass: 0, material: wallMaterialCannon });
-        wallBody.addShape(new CANNON.Plane());
-        // 壁を垂直に立てる（X軸周りの回転を0にする）
-        const angle = 0; // 0度
-        wallBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), angle);
-        world.addBody(wallBody);
-
-        // 見た目上の壁（盤面）
-        const wallMesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(20, 20),
-            new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide })
-        );
-        wallMesh.quaternion.copy(wallBody.quaternion);
-        scene.add(wallMesh);
+        // 壁（plane と backWall）はすべて削除済み
 
 
         // 釘は削除されました
@@ -152,8 +211,6 @@
         const sphereRadius = 0.5;
         const sphereBody = new CANNON.Body({
             mass: 1,
-            // 釘の真上に配置
-            // 釘を削除したため、Zは中央(0)に置く
             position: new CANNON.Vec3(0, 8, 0),
             shape: new CANNON.Sphere(sphereRadius),
             material: sphereMaterialCannon,
@@ -166,7 +223,6 @@
         if (sphereBody.linearFactor) {
             sphereBody.linearFactor.set(0, 1, 0);
         } else {
-            // もし linearFactor が未定義なら直接プロパティをセット
             sphereBody.linearFactor = new CANNON.Vec3(0, 1, 0);
         }
 
@@ -179,19 +235,37 @@
         objectsToUpdate.push({ mesh: sphereMesh, body: sphereBody });
         scene.add(sphereMesh);
 
+        // シミュレーション制御
+        let isPaused = false;
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
 
-        //==================================================
-        // イベントリスナー
-        //==================================================
-        const launchButton = document.getElementById('launchButton');
-        launchButton.addEventListener('click', () => {
-            // 既存の速度と角速度をリセット
+        playBtn.addEventListener('click', () => {
+            isPaused = false;
+        });
+        pauseBtn.addEventListener('click', () => {
+            isPaused = true;
+        });
+        resetBtn.addEventListener('click', () => {
+            // 停止して位置と速度を初期化
+            isPaused = true;
             sphereBody.velocity.set(0, 0, 0);
             sphereBody.angularVelocity.set(0, 0, 0);
-            // ボールを開始位置（釘の真上）に再配置
             sphereBody.position.set(0, 8, 0);
-            // スリープ状態から強制的に復帰させる
-            sphereBody.wakeUp();
+            sphereBody.quaternion.set(0, 0, 0, 1);
+            // Three.js メッシュも同期
+            for (const obj of objectsToUpdate) {
+                obj.mesh.position.copy(obj.body.position);
+                obj.mesh.quaternion.copy(obj.body.quaternion);
+            }
+        });
+        const resetViewBtn = document.getElementById('resetViewBtn');
+        resetViewBtn.addEventListener('click', () => {
+            // カメラ位置とコントロールターゲットを初期値に戻す
+            camera.position.copy(initialCameraPos);
+            controls.target.copy(initialTarget);
+            controls.update();
         });
 
         window.addEventListener('resize', () => {
@@ -222,13 +296,15 @@
             const deltaTime = elapsedTime - oldElapsedTime;
             oldElapsedTime = elapsedTime;
 
-            // 物理ワールドの計算を進める
-            world.step(1 / 60, deltaTime, 3);
+            // 物理ワールドの計算を進める（停止中はスキップ）
+            if (!isPaused) {
+                world.step(1 / 60, deltaTime, 3);
+            }
 
-            // デバッグ出力：0.5秒ごとに垂直速度をログ
+            // デバッグ出力：0.5秒ごとに垂直速度をログ（停止中は出力しない）
             debugElapsed += deltaTime;
             if (debugElapsed > 0.5) {
-                if (sphereBody && sphereBody.velocity) {
+                if (!isPaused && sphereBody && sphereBody.velocity) {
                     console.log('sphere vy=', sphereBody.velocity.y.toFixed(3));
                 }
                 debugElapsed = 0;
@@ -239,6 +315,9 @@
                 obj.mesh.position.copy(obj.body.position);
                 obj.mesh.quaternion.copy(obj.body.quaternion);
             }
+
+            // カメラコントロールの更新（dampingが有効なら毎フレーム必要）
+            if (typeof controls !== 'undefined') controls.update();
 
             // レンダリング
             renderer.render(scene, camera);
