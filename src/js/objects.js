@@ -8,7 +8,6 @@ import { scene } from './scene.js';
 // 設定値をインポート
 import { 
     SPHERE_RADIUS, 
-    INITIAL_SPHERE_POS, 
     SPHERE_MATERIAL_CANNON,
     GROUND_MATERIAL_CANNON,
     SLOPE_ANGLE,
@@ -29,7 +28,7 @@ export function createObject(objectDefinition) {
             // 物理ボディの作成
             body = new CANNON.Body({
                 mass: properties.mass,
-                position: properties.initialPos.clone(),
+                position: properties.initialPos.clone(), // propertiesから取得
                 shape: new CANNON.Sphere(properties.radius),
                 material: properties.material,
                 allowSleep: false,
@@ -85,16 +84,8 @@ export function createObject(objectDefinition) {
             body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
             world.addBody(body);
 
-            // 3Dメッシュの作成
-            const floorGeometry = new THREE.PlaneGeometry(1000, 1000); // 非常に大きな平面
-            const floorMaterial = new THREE.MeshStandardMaterial({ 
-                color: properties.color, 
-                side: THREE.DoubleSide 
-            });
-            mesh = new THREE.Mesh(floorGeometry, floorMaterial);
-            mesh.position.copy(body.position);
-            mesh.quaternion.copy(body.quaternion);
-            scene.add(mesh);
+            // 3Dメッシュの作成部分を削除し、meshをnullに設定
+            mesh = null; 
             break;
 
         default:

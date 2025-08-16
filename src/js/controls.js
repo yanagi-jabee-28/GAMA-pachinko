@@ -1,4 +1,6 @@
 import { initialCameraPos, initialTarget } from './scene.js';
+import { OBJECT_DEFINITIONS } from './config.js'; // OBJECT_DEFINITIONSをインポート
+import * as CANNON from 'cannon-es'; // CANNON.Vec3を使用するためインポート
 
 // シミュレーションの状態
 export let isPaused = false;
@@ -18,6 +20,10 @@ export function setupEventListeners(camera, controls, sphereBody, objectsToUpdat
     const resetViewBtn = document.getElementById('resetViewBtn');
     // launchButtonは現時点で未使用ですが、将来のためにIDを保持
     // const launchButton = document.getElementById('launchButton');
+
+    // ボールの初期位置をconfigから取得
+    const ballDefinition = OBJECT_DEFINITIONS.find(def => def.type === 'ball');
+    const initialBallPos = ballDefinition ? ballDefinition.properties.initialPos : new CANNON.Vec3(0, 0, 0); // 見つからない場合のデフォルト値
 
     // 再生ボタン
     playBtn.addEventListener('click', () => {
@@ -40,8 +46,8 @@ export function setupEventListeners(camera, controls, sphereBody, objectsToUpdat
             // 物理ボディの状態を初期化
             body.velocity.set(0, 0, 0);
             body.angularVelocity.set(0, 0, 0);
-            // ボールの初期位置にリセット
-            body.position.set(0, 8, 0);
+            // ボールの初期位置にリセット (configから取得した値を使用)
+            body.position.copy(initialBallPos); 
             body.quaternion.set(0, 0, 0, 1);
 
             // Three.jsメッシュの位置も物理ボディに即座に同期

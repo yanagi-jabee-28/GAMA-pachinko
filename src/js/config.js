@@ -10,17 +10,17 @@ export const GROUND_MATERIAL_CANNON = new CANNON.Material('ground');
 // ボールの設定
 export const SPHERE_RADIUS = 0.5;
 // 坂の上に配置するようにY座標とZ座標を調整
-export const INITIAL_SPHERE_POS = new CANNON.Vec3(0, 10, -5);
+export const INITIAL_SPHERE_POS = new CANNON.Vec3(0, 100, 0);
 
 // 坂の設定
-export const SLOPE_ANGLE = -15; // 坂の傾斜角度（度）
+export const SLOPE_ANGLE = -80; // 坂の傾斜角度（度）
 export const SLOPE_WIDTH = 20; // 坂の幅
 export const SLOPE_HEIGHT = 1; // 坂の厚み
 export const SLOPE_DEPTH = 20; // 坂の奥行き
-export const SLOPE_POS = new CANNON.Vec3(0, 0, 0); // 坂の中心位置
+export const SLOPE_POS = new CANNON.Vec3(0, 0, -0.4); // 坂の中心位置
 
 // 床の設定
-export const FLOOR_POS = new CANNON.Vec3(0, -5, 0); // 床の中心位置
+export const FLOOR_POS = new CANNON.Vec3(0, 0, 0); // 床の中心位置
 
 // オブジェクト定義
 export const OBJECT_DEFINITIONS = [

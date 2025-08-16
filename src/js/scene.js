@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-import { FRUSTUM_SIZE } from './config.js';
+import { FRUSTUM_SIZE, FLOOR_POS } from './config.js'; // FLOOR_POSをインポート
 
 // シーン
 export const scene = new THREE.Scene();
@@ -37,6 +37,11 @@ scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(30, 10, 0);
 scene.add(directionalLight);
+
+// 床のグリッドヘルパーを追加
+const floorGridHelper = new THREE.GridHelper(1000, 100); // 非常に大きなグリッド
+floorGridHelper.position.y = FLOOR_POS.y; // configで定義した床のY座標に合わせる
+scene.add(floorGridHelper);
 
 // ウィンドウリサイズ処理
 window.addEventListener('resize', () => {
