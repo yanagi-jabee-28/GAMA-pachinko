@@ -1,21 +1,31 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 
-// 各モジュールから必要な変数や関数をインポート
-import { scene, camera, renderer, controls, createBallMesh } from './scene.js';
-import { world, objectsToUpdate, createBallBody } from './physics.js';
+// 各モジュールのコア要素をインポート
+import { scene, camera, renderer, controls } from './scene.js'; 
+import { world, objectsToUpdate } from './physics.js';
 import { setupEventListeners, isPaused } from './controls.js';
+// オブジェクト作成関数を新しいファイルからインポート
+import { createObject } from './objects.js'; // createBall, createSlope, createFloor は不要になる
+import { OBJECT_DEFINITIONS } from './config.js'; // New
 
 //==================================================
 // 初期化処理
 //==================================================
 
-// 1. 物理オブジェクトと3Dオブジェクトを作成
-const sphereBody = createBallBody();
-createBallMesh(sphereBody);
+// 1. オブジェクトを作成
+const createdObjects = {}; // 生成されたオブジェクトを格納するマップ
+
+OBJECT_DEFINITIONS.forEach(objDef => {
+    const obj = createObject(objDef);
+    if (obj) {
+        createdObjects[objDef.type] = obj; // タイプ名でアクセスできるように保存
+    }
+});
 
 // 2. UIイベントリスナーをセットアップ
-setupEventListeners(camera, controls, sphereBody, objectsToUpdate);
+// controls.jsはボールの物理ボディ(ball.body)を必要とします
+setupEventListeners(camera, controls, createdObjects.ball.body, objectsToUpdate);
 
 //==================================================
 // アニメーションループ

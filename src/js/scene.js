@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-import { FRUSTUM_SIZE, SPHERE_RADIUS } from './config.js';
-import { objectsToUpdate } from './physics.js';
+import { FRUSTUM_SIZE } from './config.js';
 
 // シーン
 export const scene = new THREE.Scene();
@@ -9,7 +8,8 @@ export const scene = new THREE.Scene();
 // カメラ
 const aspect = window.innerWidth / window.innerHeight;
 export const camera = new THREE.OrthographicCamera(FRUSTUM_SIZE * aspect / -2, FRUSTUM_SIZE * aspect / 2, FRUSTUM_SIZE / 2, FRUSTUM_SIZE / -2, 0.1, 1000);
-camera.position.set(20, 12, 20);
+// 坂が見やすいようにカメラの初期位置を調整
+camera.position.set(0, 10, 25);
 camera.lookAt(0, 0, 0);
 
 // レンダラー
@@ -37,22 +37,6 @@ scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(30, 10, 0);
 scene.add(directionalLight);
-
-/**
- * ボールの3Dメッシュを作成し、シーンに追加します。
- * @param {CANNON.Body} body - 関連付ける物理ボディ
- * @returns {THREE.Mesh} 作成されたボールのメッシュ
- */
-export function createBallMesh(body) {
-    const sphereMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(SPHERE_RADIUS),
-        new THREE.MeshStandardMaterial({ color: 'red', metalness: 0.5, roughness: 0.4 })
-    );
-    sphereMesh.position.copy(body.position);
-    scene.add(sphereMesh);
-    objectsToUpdate.push({ mesh: sphereMesh, body: body });
-    return sphereMesh;
-}
 
 // ウィンドウリサイズ処理
 window.addEventListener('resize', () => {

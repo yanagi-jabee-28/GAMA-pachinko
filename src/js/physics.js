@@ -1,5 +1,9 @@
 import * as CANNON from 'cannon-es';
-import { SPHERE_RADIUS, INITIAL_SPHERE_POS, SPHERE_MATERIAL_CANNON } from './config.js';
+// 必要なマテリアル設定のみインポート
+import { 
+    SPHERE_MATERIAL_CANNON,
+    GROUND_MATERIAL_CANNON,
+} from './config.js';
 
 // 物理ワールドの初期化
 export const world = new CANNON.World();
@@ -7,25 +11,17 @@ world.gravity.set(0, -9.82, 0); // 重力設定
 world.allowSleep = true; // パフォーマンス向上のためスリープを許可
 
 // 更新が必要な物理オブジェクトのリスト
+// このリストは objects.js でオブジェクトが追加され、main.js のアニメーションループで参照される
 export const objectsToUpdate = [];
 
-/**
- * ボールの物理ボディを作成し、ワールドに追加します。
- * @returns {CANNON.Body} 作成されたボールの物理ボディ
- */
-export function createBallBody() {
-    const sphereBody = new CANNON.Body({
-        mass: 1,
-        position: INITIAL_SPHERE_POS.clone(),
-        shape: new CANNON.Sphere(SPHERE_RADIUS),
-        material: SPHERE_MATERIAL_CANNON,
-        allowSleep: false, // 初期落下を確実にする
-    });
-
-    // X軸とZ軸の移動をロックし、Y軸方向（垂直方向）の動きのみを許可する
-    // これにより、ボールが真下に落下するようになります
-    sphereBody.linearFactor.set(0, 1, 0);
-
-    world.addBody(sphereBody);
-    return sphereBody;
-}
+// 物理マテリアル間の相互作用を定義します
+const sphereGroundContactMaterial = new CANNON.ContactMaterial(
+    SPHERE_MATERIAL_CANNON,
+    GROUND_MATERIAL_CANNON,
+    {
+        friction: 0.3,    // 摩擦係数
+        restitution: 0.4, // 反発係数
+    }
+);
+// 定義した相互作用をワールドに追加します
+world.addContactMaterial(sphereGroundContactMaterial);
