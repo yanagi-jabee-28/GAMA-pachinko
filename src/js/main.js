@@ -23,9 +23,6 @@ setupEventListeners(camera, controls, sphereBody, objectsToUpdate);
 const clock = new THREE.Clock();
 let oldElapsedTime = 0;
 
-// デバッグ用タイマー
-let debugElapsed = 0;
-
 function animate() {
     requestAnimationFrame(animate);
 
@@ -36,15 +33,6 @@ function animate() {
     // 物理ワールドの計算を進める（停止中はスキップ）
     if (!isPaused) {
         world.step(1 / 60, deltaTime, 3);
-    }
-
-    // デバッグ出力：0.5秒ごとに垂直速度をログ（停止中は出力しない）
-    debugElapsed += deltaTime;
-    if (debugElapsed > 0.5) {
-        if (!isPaused && sphereBody && sphereBody.velocity) {
-            console.log('sphere vy=', sphereBody.velocity.y.toFixed(3));
-        }
-        debugElapsed = 0;
     }
 
     // Three.jsのオブジェクトを物理ボディに同期

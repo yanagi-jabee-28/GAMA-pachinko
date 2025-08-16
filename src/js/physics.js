@@ -22,7 +22,8 @@ export function createBallBody() {
         allowSleep: false, // 初期落下を確実にする
     });
 
-    // Y軸方向の動きのみを許可
+    // X軸とZ軸の移動をロックし、Y軸方向（垂直方向）の動きのみを許可する
+    // これにより、ボールが真下に落下するようになります
     sphereBody.linearFactor.set(0, 1, 0);
 
     world.addBody(sphereBody);

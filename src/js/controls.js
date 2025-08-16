@@ -32,15 +32,21 @@ export function setupEventListeners(camera, controls, sphereBody, objectsToUpdat
     // リセットボタン
     resetBtn.addEventListener('click', () => {
         isPaused = true;
-        // 物理ボディの位置と速度をリセット
-        sphereBody.velocity.set(0, 0, 0);
-        sphereBody.angularVelocity.set(0, 0, 0);
-        sphereBody.position.set(0, 8, 0);
-        sphereBody.quaternion.set(0, 0, 0, 1);
-        // Three.jsメッシュの位置も同期
+
+        // objectsToUpdateリスト内のすべての物理オブジェクトをリセット
         for (const obj of objectsToUpdate) {
-            obj.mesh.position.copy(obj.body.position);
-            obj.mesh.quaternion.copy(obj.body.quaternion);
+            const { body, mesh } = obj;
+
+            // 物理ボディの状態を初期化
+            body.velocity.set(0, 0, 0);
+            body.angularVelocity.set(0, 0, 0);
+            // ボールの初期位置にリセット
+            body.position.set(0, 8, 0);
+            body.quaternion.set(0, 0, 0, 1);
+
+            // Three.jsメッシュの位置も物理ボディに即座に同期
+            mesh.position.copy(body.position);
+            mesh.quaternion.copy(body.quaternion);
         }
     });
 
