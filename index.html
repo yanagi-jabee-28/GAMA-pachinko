@@ -1,242 +1,94 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>パチンコゲーム - v4 (発射機構の改良)</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #1a1a1a;
-            font-family: 'Inter', sans-serif;
-            color: #e0e0e0;
-            text-align: center;
-        }
-        .container {
-            position: relative; /* UI要素を重ねるための基準 */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        canvas {
-            background-color: #2c3e50;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        }
-        h1 {
-            color: #ecf0f1;
-            margin-bottom: 1rem;
-        }
-        button {
-            margin-top: 1rem;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            background-color: #e74c3c;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            transition: background-color 0.3s;
-            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
-        }
-        button:hover {
-            background-color: #c0392b;
-        }
-        #ui-container {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            width: calc(100% - 20px);
-            display: flex;
-            justify-content: space-between;
-            font-size: 20px;
-            color: #f1c40f;
-            pointer-events: none; /* UIがクリック操作を妨げないようにする */
-        }
-    </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>パチンコゲーム - v4 (発射機構の改良)</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			background-color: #1a1a1a;
+			font-family: 'Inter', sans-serif;
+			color: #e0e0e0;
+			text-align: center;
+		}
+
+		.container {
+			position: relative;
+			/* UI要素を重ねるための基準 */
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+		}
+
+		canvas {
+			background-color: #2c3e50;
+			border-radius: 12px;
+			box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+		}
+
+		h1 {
+			color: #ecf0f1;
+			margin-bottom: 1rem;
+		}
+
+		button {
+			margin-top: 1rem;
+			padding: 10px 20px;
+			font-size: 16px;
+			cursor: pointer;
+			background-color: #e74c3c;
+			color: white;
+			border: none;
+			border-radius: 8px;
+			transition: background-color 0.3s;
+			box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+		}
+
+		button:hover {
+			background-color: #c0392b;
+		}
+
+		#ui-container {
+			position: absolute;
+			top: 10px;
+			left: 10px;
+			width: calc(100% - 20px);
+			display: flex;
+			justify-content: space-between;
+			font-size: 20px;
+			color: #f1c40f;
+			pointer-events: none;
+			/* UIがクリック操作を妨げないようにする */
+		}
+	</style>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
-    <div class="container">
-        <h1>パチンコゲーム v4 - 発射機構の改良</h1>
-        <div id="canvas-container">
-            <!-- UI要素をここに追加 -->
-            <div id="ui-container">
-                <div id="score">スコア: 0</div>
-                <div id="ball-count">発射数: 0</div>
-            </div>
-            <canvas id="gameCanvas"></canvas>
-        </div>
-        <button id="launchButton">ボール発射</button>
-    </div>
+	<div class="container">
+		<h1>パチンコゲーム v4 - 発射機構の改良</h1>
+		<div id="canvas-container">
+			<!-- UI要素をここに追加 -->
+			<div id="ui-container">
+				<div id="score">スコア: 0</div>
+				<div id="ball-count">発射数: 0</div>
+			</div>
+			<canvas id="gameCanvas"></canvas>
+		</div>
+		<button id="launchButton">ボール発射</button>
+	</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-
-    <script>
-        // --- 1. Matter.jsモジュールのエイリアス設定 ---
-        const { Engine, Runner, Bodies, Composite, Body, Events } = Matter;
-
-        // --- 2. 初期設定とゲーム状態 ---
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const canvasWidth = 400;
-        const canvasHeight = 600;
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-
-        let score = 0;
-        let ballCount = 0;
-        const scoreElement = document.getElementById('score');
-        const ballCountElement = document.getElementById('ball-count');
-
-        // --- 3. Matter.jsエンジンのセットアップ ---
-        const engine = Engine.create();
-        const world = engine.world;
-        // ★重力を少し弱めて、ボールの速度感を調整
-        engine.world.gravity.y = 0.6;
-
-        // --- 4. ゲームオブジェクトの作成 ---
-        const allBodies = [];
-        const wallOptions = { isStatic: true, render: { fillStyle: '#bdc3c7' } };
-        allBodies.push(Bodies.rectangle(canvasWidth / 2, canvasHeight + 10, canvasWidth, 20, wallOptions)); // 床
-        allBodies.push(Bodies.rectangle(canvasWidth + 10, canvasHeight / 2, 20, canvasHeight, wallOptions)); // 右壁
-        allBodies.push(Bodies.rectangle(canvasWidth / 2, -10, canvasWidth, 20, wallOptions)); // 天井
-
-        // ★発射レーンの作成
-        const chuteWidth = 35;
-        allBodies.push(Bodies.rectangle(chuteWidth / 2 - 10, canvasHeight / 2, 10, canvasHeight, wallOptions)); // レーン左壁
-        allBodies.push(Bodies.rectangle(chuteWidth, canvasHeight / 2 + 50, 10, canvasHeight - 100, wallOptions)); // レーン右壁
-
-        // 釘を作成（配置を右にずらす）
-        const pinRadius = 5;
-        const rows = 15;
-        const cols = 8; // レーンの分、列を減らす
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                // ★開始X座標を調整
-                let x = 80 + col * 40;
-                if (row % 2 === 1) x += 20;
-                let y = 80 + row * 30;
-                if (x < canvasWidth - 40) {
-                    const pin = Bodies.circle(x, y, pinRadius, {
-                        isStatic: true,
-                        restitution: 0.5,
-                        friction: 0.1,
-                        label: 'pin'
-                    });
-                    allBodies.push(pin);
-                }
-            }
-        }
-
-        // 入賞口（アタッカー）を作成
-        const pocket = Bodies.rectangle(canvasWidth / 2 + 20, 550, 80, 20, {
-            isStatic: true,
-            isSensor: true,
-            label: 'pocket'
-        });
-        allBodies.push(pocket);
-
-        Composite.add(world, allBodies);
-
-        // --- 5. ユーザー入力 ---
-        const launchButton = document.getElementById('launchButton');
-        launchButton.addEventListener('click', () => {
-            ballCount++;
-            ballCountElement.textContent = `発射数: ${ballCount}`;
-
-            // ★発射位置をレーン下部に変更
-            const ball = Bodies.circle(chuteWidth / 2 - 5, canvasHeight - 30, 8, {
-                restitution: 0.4, // 反発を少し抑える
-                friction: 0.01,
-                label: 'ball'
-            });
-            Composite.add(world, ball);
-
-            // ★発射力を調整（主に上方向へ）
-            const baseForce = 0.040;
-            const randomFactor = 0.006;
-            const forceY = -(baseForce + Math.random() * randomFactor);
-            const forceX = 0.0005; // ほんの少し右に力を加え、壁との摩擦を生む
-            Body.applyForce(ball, ball.position, { x: forceX, y: forceY });
-        });
-
-        // --- 6. 衝突イベントの監視 ---
-        Events.on(engine, 'collisionStart', (event) => {
-            const pairs = event.pairs;
-            for (let i = 0; i < pairs.length; i++) {
-                const pair = pairs[i];
-                if ((pair.bodyA.label === 'ball' && pair.bodyB.label === 'pocket') ||
-                    (pair.bodyA.label === 'pocket' && pair.bodyB.label === 'ball')) {
-                    
-                    const ballToRemove = pair.bodyA.label === 'ball' ? pair.bodyA : pair.bodyB;
-                    score += 100;
-                    scoreElement.textContent = `スコア: ${score}`;
-
-                    setTimeout(() => {
-                         Composite.remove(world, ballToRemove);
-                    }, 0);
-                }
-            }
-        });
-        
-        // --- 7. カスタム描画ループ ---
-        (function render() {
-            const bodies = Composite.allBodies(world);
-            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-            
-            for (let i = 0; i < bodies.length; i++) {
-                const body = bodies[i];
-                ctx.beginPath();
-                
-                switch(body.label) {
-                    case 'ball':
-                        ctx.fillStyle = '#f1c40f'; // 黄色
-                        break;
-                    case 'pin':
-                        ctx.fillStyle = '#bdc3c7'; // 銀色
-                        break;
-                    case 'pocket':
-                        ctx.fillStyle = '#e74c3c'; // 赤色
-                        break;
-                    default:
-                        ctx.fillStyle = '#95a5a6'; // 壁など
-                }
-
-                const vertices = body.vertices;
-                ctx.moveTo(vertices[0].x, vertices[0].y);
-                for (let j = 1; j < vertices.length; j++) {
-                    ctx.lineTo(vertices[j].x, vertices[j].y);
-                }
-                ctx.closePath();
-                ctx.fill();
-            }
-            
-            requestAnimationFrame(render);
-        })();
-
-
-        // --- 8. エンジンの実行 ---
-        const runner = Runner.create();
-        Runner.run(runner, engine);
-
-        // 画面外のボールを定期的に削除
-        Events.on(engine, 'afterUpdate', () => {
-            Composite.allBodies(world).forEach(body => {
-                // ★レーンから落ちたボールも削除する
-                if (body.label === 'ball' && (body.position.y > canvasHeight + 50 || body.position.x < -10)) {
-                    Composite.remove(world, body);
-                }
-            });
-        });
-
-    </script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+	<script type="module" src="dist/main.js" defer></script>
 </body>
+
 </html>
