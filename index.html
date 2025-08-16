@@ -43,6 +43,7 @@
             font-size: 14px;
             cursor: pointer;
         }
+
     </style>
 </head>
 
@@ -140,52 +141,6 @@
         // 真横ビューに合わせて光源も横方向から当てる
         directionalLight.position.set(30, 10, 0);
         scene.add(directionalLight);
-
-        // 軸ヘルパーとラベルを追加（X:赤, Y:緑, Z:青）
-        const axesHelper = new THREE.AxesHelper(5);
-        // 小さくして画面左下付近に配置（カメラが +X 側にあるため Z+ が画面左）
-        axesHelper.scale.set(0.6, 0.6, 0.6);
-        axesHelper.position.set(0, -4, 5);
-        scene.add(axesHelper);
-
-        // ラベル用の簡易スプライトを作る関数
-        function makeLabelSprite(text, bgColor) {
-            const size = 128;
-            const canvas = document.createElement('canvas');
-            canvas.width = size;
-            canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            // 背景を描く（円）
-            ctx.fillStyle = bgColor;
-            ctx.beginPath();
-            ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
-            ctx.fill();
-            // 文字を描く
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 72px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(text, size / 2, size / 2 + 4);
-            const tex = new THREE.CanvasTexture(canvas);
-            const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
-            const sprite = new THREE.Sprite(mat);
-            // 小さめに表示
-            sprite.scale.set(0.6, 0.6, 1);
-            return sprite;
-        }
-
-        const labelX = makeLabelSprite('X', '#ff0000');
-        labelX.position.set(2, -4, 5); // 左下付近のXラベル
-        scene.add(labelX);
-
-        const labelY = makeLabelSprite('Y', '#00aa00');
-        labelY.position.set(0, -2, 5); // 左下付近のYラベル
-        scene.add(labelY);
-
-        const labelZ = makeLabelSprite('Z', '#0000ff');
-        labelZ.position.set(0, -4, 7); // 左下付近のZラベル
-        scene.add(labelZ);
-
 
         //==================================================
         // 物理マテリアルの設定
