@@ -25,7 +25,9 @@ export const SLOPE_ANGLE = -80; // 坂の傾斜角度（度）。X軸周りの�
 export const SLOPE_WIDTH = 20; // 坂の幅（X軸方向）
 export const SLOPE_HEIGHT = 1; // 坂の厚み（Y軸方向）
 export const SLOPE_DEPTH = 20; // 坂の奥行き（Z軸方向）
-export const SLOPE_POS = new CANNON.Vec3(0, 0, 0); // 坂の中心位置（X, Y, Z座標）
+// 坂の中心位置（X, Y, Z座標）。
+// Yを負にして全体を下げ、ボールが確実に接触・転がるように初期配置を調整。
+export const SLOPE_POS = new CANNON.Vec3(-0, -20, 1);
 
 // 床の設定
 export const FLOOR_POS = new CANNON.Vec3(0, -5, 0); // 床の中心位置（X, Y, Z座標）。CANNON.Planeで使用。

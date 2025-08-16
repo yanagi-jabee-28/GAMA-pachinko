@@ -18,12 +18,12 @@ import { world, objectsToUpdate } from './physics.js';
 import { scene } from './scene.js';
 
 // 設定値をインポート
-import { 
-    SPHERE_RADIUS, 
+import {
+    SPHERE_RADIUS,
     SPHERE_MATERIAL_CANNON,
     GROUND_MATERIAL_CANNON,
     SLOPE_ANGLE, // 坂の角度はpropertiesから取得するため、ここでは直接使用しないが、importは残す
-    OBJECT_DEFINITIONS // OBJECT_DEFINITIONS自体はcreateObject関数内で直接使用しないが、関連性を示すためimportは残す
+    OBJECT_DEFINITIONS
 } from './config.js';
 
 /**
@@ -55,10 +55,10 @@ export function createObject(objectDefinition) {
 
             mesh = new THREE.Mesh(
                 new THREE.SphereGeometry(properties.radius),
-                new THREE.MeshStandardMaterial({ 
-                    color: properties.color, 
-                    metalness: 0.5, 
-                    roughness: 0.4 
+                new THREE.MeshStandardMaterial({
+                    color: properties.color,
+                    metalness: 0.5,
+                    roughness: 0.4
                 })
             );
             mesh.position.copy(body.position);
@@ -76,8 +76,19 @@ export function createObject(objectDefinition) {
 
             // 坂の上端のZ座標とY座標を計算
             // 坂の中心を基準に、奥行きと角度を考慮して上端を算出
-            const topZOffset = Math.cos(angleRad) * properties.depth / 2;
-            const topYOffset = Math.sin(angleRad) * properties.depth / 2;
+            const halfDepth = properties.depth / 2;
+            const halfHeight = properties.height / 2; // 坂の厚みの半分
+
+            // 坂の回転後の上端の相対座標を計算
+            // Z軸方向のオフセット: 坂の奥行きの半分 * cos(角度)
+            // Y軸方向のオフセット: 坂の奥行きの半分 * sin(角度)
+            const rotatedZOffset = Math.cos(angleRad) * halfDepth;
+            const rotatedYOffset = Math.sin(angleRad) * halfDepth;
+
+            // 坂の表面のY座標をボールの初期Y座標に合わせるためのオフセット
+            // 坂の厚みを考慮し、坂の表面がボールの初期位置に来るように調整
+            // 坂の傾斜によって厚みの影響も変わるため、cos(angleRad)を掛ける
+            const surfaceOffsetDueToThickness = Math.cos(angleRad) * halfHeight;
 
             // ボールの初期位置を取得 (config.jsのOBJECT_DEFINITIONSから)
             const ballDefinition = OBJECT_DEFINITIONS.find(def => def.type === 'ball');
@@ -85,12 +96,14 @@ export function createObject(objectDefinition) {
 
             // 坂の新しい中心位置を計算
             // ボールの初期位置のYとZに、坂の上端からのオフセットを考慮して坂の中心を逆算
-            const newSlopePosY = ballInitialPos.y - topYOffset;
-            const newSlopePosZ = ballInitialPos.z - topZOffset;
+            // 坂の表面がボールの初期位置に来るように調整
+            // config で与えた pos.y / pos.z をオフセットとして加味できるようにする
+            const newSlopePosY = ballInitialPos.y - rotatedYOffset - surfaceOffsetDueToThickness + (properties.pos.y || 0);
+            const newSlopePosZ = ballInitialPos.z - rotatedZOffset + (properties.pos.z || 0);
             const newSlopePos = new CANNON.Vec3(properties.pos.x, newSlopePosY, newSlopePosZ); // Xはそのまま
 
             body = new CANNON.Body({
-                mass: 0, 
+                mass: 0,
                 shape: new CANNON.Box(slopeHalfExtents), // 箱型形状
                 material: properties.material, // 物理マテリアル
                 position: newSlopePos // 新しい中心位置を設定
@@ -100,8 +113,8 @@ export function createObject(objectDefinition) {
 
             mesh = new THREE.Mesh(
                 new THREE.BoxGeometry(properties.width, properties.height, properties.depth), // 箱型ジオメトリ
-                new THREE.MeshStandardMaterial({ 
-                    color: properties.color, 
+                new THREE.MeshStandardMaterial({
+                    color: properties.color,
                     side: THREE.DoubleSide // 裏面も描画
                 })
             );
@@ -126,7 +139,7 @@ export function createObject(objectDefinition) {
 
             // 床の3DメッシュはGridHelperで表現するため、ここでは生成しません。
             // meshはnullになります。
-            mesh = null; 
+            mesh = null;
             break;
 
         default:
