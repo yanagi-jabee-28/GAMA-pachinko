@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>3Dパチンコ Physics Test</title>
+    <style>
+        /* ボディ全体のスタイルをリセット */
+        body {
+            margin: 0;
+            overflow: hidden; /* スクロールバーを非表示にする */
+        }
+        /* キャンバスのスタイル */
+        #myCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* ボタンのスタイル */
+        #launchButton {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D描画領域となるキャンバス -->
+    <canvas id="myCanvas"></canvas>
+
+    <!-- ボールを打ち上げるためのボタン -->
+    <button id="launchButton">ボールを落とす</button>
+
+    <!-- ES Moduleのimportmapを使用してライブラリを読み込む -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "cannon-es": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+            }
+        }
+    </script>
+
+    <!-- メインのプログラム -->
+    <script type="module">
+        //==================================================
+        // ライブラリのインポート
+        //==================================================
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+
+        //==================================================
+        // 初期化処理
+        //==================================================
+
+        // Three.jsのシーンを作成
+        const scene = new THREE.Scene();
+
+        // Cannon.jsの物理ワールドを作成
+        const world = new CANNON.World();
+        // パチンコ台の盤面の傾きを再現するため、重力を少し手前（+Z方向）に傾ける
+        world.gravity.set(0, -20, 5);
+        
+        // パフォーマンス改善：動きの少ない物体の物理計算を休止させる機能を有効化
+        world.allowSleep = true;
+
+
+        //==================================================
+        // カメラの設定
+        //==================================================
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 30); // 盤面が見やすいように調整
+        camera.lookAt(0, 5, 0); // 注視点を調整
+
+
+        //==================================================
+        // レンダラーの設定
+        //==================================================
+        const renderer = new THREE.WebGLRenderer({
+            canvas: document.querySelector('#myCanvas'),
+            antialias: true
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+
+        //==================================================
+        // 光源の設定
+        //==================================================
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 20, 15);
+        scene.add(directionalLight);
+
+
+        //==================================================
+        // 物理マテリアルの設定
+        //==================================================
+        const sphereMaterialCannon = new CANNON.Material('sphere');
+        const groundMaterialCannon = new CANNON.Material('ground');
+        const nailMaterialCannon = new CANNON.Material('nail');
+
+        // 地面とボールの接触挙動
+        const groundContactMaterial = new CANNON.ContactMaterial(groundMaterialCannon, sphereMaterialCannon, { friction: 0.3, restitution: 0.2 });
+        world.addContactMaterial(groundContactMaterial);
+
+        // 釘とボールの接触挙動（金属同士を想定）
+        const nailContactMaterial = new CANNON.ContactMaterial(nailMaterialCannon, sphereMaterialCannon, { friction: 0.1, restitution: 0.8 });
+        world.addContactMaterial(nailContactMaterial);
+
+
+        //==================================================
+        // 物理オブジェクトと表示オブジェクトの作成
+        //==================================================
+        const objectsToUpdate = [];
+
+        //--- 盤面 (Ground) ---
+        // 盤面は物理的には無限平面として定義
+        const groundBody = new CANNON.Body({ mass: 0, material: groundMaterialCannon });
+        groundBody.addShape(new CANNON.Plane());
+        // パチンコ台なので、盤面自体を奥に80度ほど傾ける
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI * 0.45);
+        world.addBody(groundBody);
+
+        // 見た目上の盤面（少し大きめに作成）
+        const groundMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(40, 40),
+            new THREE.MeshStandardMaterial({ color: 0x333333 })
+        );
+        groundMesh.quaternion.copy(groundBody.quaternion);
+        scene.add(groundMesh);
+
+
+        //--- 釘 (Nails) ---
+        // 釘のジオメトリとマテリアルは一度だけ生成し、再利用する
+        const nailRadius = 0.15;
+        const nailHeight = 1;
+        const nailGeometry = new THREE.CylinderGeometry(nailRadius, nailRadius, nailHeight, 8);
+        const nailThreeMaterial = new THREE.MeshStandardMaterial({ color: 'silver', metalness: 0.8, roughness: 0.3 });
+        const nailShape = new CANNON.Cylinder(nailRadius, nailRadius, nailHeight, 8);
+
+        // 釘を千鳥格子状に配置
+        const rows = 10; // 行数
+        const cols = 8;  // 列数
+        const offsetX = -8;
+        const offsetZ = -8;
+
+        for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < cols; j++) {
+                const x = offsetX + j * 2.2 + (i % 2 === 0 ? 1.1 : 0);
+                const y = 0; // Y座標は盤面の傾きに依存
+                const z = offsetZ + i * 2;
+
+                const nailBody = new CANNON.Body({ mass: 0, material: nailMaterialCannon });
+                nailBody.addShape(nailShape);
+                
+                // 釘を盤面に対して垂直に立てるため、盤面の回転をコピーし、さらに90度起こす
+                const q1 = groundBody.quaternion; // 盤面の回転
+                const q2 = new CANNON.Quaternion().setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2); // 起こす回転
+                nailBody.quaternion.copy(q1.mult(q2)); // 回転を合成
+
+                // 盤面からのオフセットを考慮して位置を決定
+                const positionVec = new CANNON.Vec3(x, y, z);
+                nailBody.position.copy(positionVec);
+
+                world.addBody(nailBody);
+
+                const nailMesh = new THREE.Mesh(nailGeometry, nailThreeMaterial);
+                nailMesh.position.copy(nailBody.position);
+                nailMesh.quaternion.copy(nailBody.quaternion);
+                scene.add(nailMesh);
+            }
+        }
+
+        //--- パチンコ玉 (Sphere) ---
+        const sphereRadius = 0.25;
+        const sphereBody = new CANNON.Body({
+            mass: 1,
+            position: new CANNON.Vec3(0, 10, 0),
+            shape: new CANNON.Sphere(sphereRadius),
+            material: sphereMaterialCannon,
+            allowSleep: true,
+            sleepSpeedLimit: 0.1,
+            sleepTimeLimit: 1,
+        });
+        world.addBody(sphereBody);
+
+        const sphereMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(sphereRadius),
+            new THREE.MeshStandardMaterial({ color: 'gold', metalness: 0.8, roughness: 0.2 })
+        );
+        objectsToUpdate.push({ mesh: sphereMesh, body: sphereBody });
+        scene.add(sphereMesh);
+
+
+        //==================================================
+        // イベントリスナー
+        //==================================================
+        const launchButton = document.getElementById('launchButton');
+        launchButton.addEventListener('click', () => {
+            sphereBody.velocity.set(0, 0, 0);
+            sphereBody.angularVelocity.set(0, 0, 0);
+            // ボールを釘の上部中央あたりに再配置
+            sphereBody.position.set(0, 5, -10);
+            sphereBody.wakeUp();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+
+        //==================================================
+        // アニメーションループ
+        //==================================================
+        const clock = new THREE.Clock();
+        let oldElapsedTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+            const deltaTime = elapsedTime - oldElapsedTime;
+            oldElapsedTime = elapsedTime;
+
+            world.step(1 / 60, deltaTime, 3);
+
+            for (const obj of objectsToUpdate) {
+                obj.mesh.position.copy(obj.body.position);
+                obj.mesh.quaternion.copy(obj.body.quaternion);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+    </script>
+</body>
+</html>
