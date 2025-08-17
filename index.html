@@ -508,6 +508,38 @@
 
 		// --- ゲームロジック ---
 
+		// ★追加: 破片を生成する関数 (修正版)
+		function createDebris(x, y, color) {
+			const debrisCount = 8;
+			const debris = [];
+			for (let i = 0; i < debrisCount; i++) {
+				const angle = Math.random() * Math.PI * 2;
+				const speed = 3 + Math.random() * 4;
+				const particle = Bodies.circle(x, y, 1 + Math.random() * 2, {
+					label: 'debris',
+					friction: 0.05,
+					restitution: 0.4,
+					render: { fillStyle: color },
+					// ★変更点: 破片同士や他のオブジェクトと衝突しないように設定
+					collisionFilter: {
+						group: -1
+					}
+				});
+				Body.setVelocity(particle, {
+					x: Math.cos(angle) * speed,
+					y: Math.sin(angle) * speed - 2
+				});
+				debris.push(particle);
+			}
+
+			Composite.add(world, debris);
+
+			// ★変更点: 0.2秒後に破片を消去する
+			setTimeout(() => {
+				Composite.remove(world, debris);
+			}, 200);
+		}
+
 		// ボタンを押し続けている間、玉を落下させる
 		function startDropping() {
 			if (dropInterval) return;
@@ -597,14 +629,17 @@
 							// カウント更新
 							orangeHits++;
 							updateStats();
-							// 見た目をオレンジにして即時回収して黄金として再投入する
-							try { ball.render.fillStyle = '#e67e22'; } catch (e) { }
+							// ★変更点: 砕ける演出を追加
+							createDebris(ball.position.x, ball.position.y, '#e67e22');
 							try { Composite.remove(world, ball); } catch (e) { }
+							// 黄金として再投入する
 							setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
 						}
 						break;
 					case 'tulip':
 						if (isTopHit(ball, other)) {
+							// ★変更点: 砕ける演出を追加
+							createDebris(ball.position.x, ball.position.y, '#3498db');
 							// チューリップに入ったら必ず回収して再投下する
 							try { Composite.remove(world, ball); } catch (e) { }
 							blueHits++;
@@ -618,6 +653,8 @@
 					case 'missZone':
 						// ハズレゾーン: 免疫がある玉は無視
 						if (ball.isImmuneToMiss) { break; }
+						// ★変更点: 玉を消す代わりに砕ける演出を追加
+						createDebris(ball.position.x, ball.position.y, ball.render.fillStyle);
 						try { Composite.remove(world, ball); } catch (e) { }
 						missHits++;
 						updateStats();
