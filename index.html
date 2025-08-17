@@ -179,8 +179,34 @@
 			render: { fillStyle: '#bdc3c7' }
 		};
 
-		const rows = 18;
 		const spacing = 35;
+
+		// 画面内上部に追加の釘行を挿入（画面の一番上付近）
+		// これにより、玉は上で早めに拡散されやすくなる
+		// 上段 (y = 20)
+		{
+			const topY = 20;
+			const cols = 9;
+			const rowWidth = (cols - 1) * spacing;
+			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset;
+			for (let col = 0; col < cols; col++) {
+				const x = xOffset + col * spacing;
+				pegs.push(Bodies.circle(x, topY, 4, pegOptions));
+			}
+		}
+		// 中段 (y = 50)
+		{
+			const topY = 50;
+			const cols = 8;
+			const rowWidth = (cols - 1) * spacing;
+			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset;
+			for (let col = 0; col < cols; col++) {
+				const x = xOffset + col * spacing;
+				pegs.push(Bodies.circle(x, topY, 4, pegOptions));
+			}
+		}
+
+		const rows = 18;
 
 		for (let row = 0; row < rows; row++) {
 			const y = 80 + row * 30;
@@ -313,6 +339,22 @@
 		});
 		Composite.add(world, [startChucker, tulipLeft, tulipRight]);
 
+		// 役物左右のフェンス（ガイド）を追加して横からの侵入を物理的に防ぐ
+		const fenceHeight = 40;
+		const fenceThickness = 6;
+		// startChucker の左右フェンス
+		const fenceOffsetX = 26;
+		const leftFence = Bodies.rectangle((GAME_WIDTH / 2 + globalXOffset) - fenceOffsetX, 560, fenceThickness, fenceHeight, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+		const rightFence = Bodies.rectangle((GAME_WIDTH / 2 + globalXOffset) + fenceOffsetX, 560, fenceThickness, fenceHeight, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+		// チューリップ左右にもフェンス（入口の幅を限定）
+		const tulipFenceY = 450;
+		const tulipFenceOffset = 22;
+		const tulipLeftFenceL = Bodies.rectangle(tulipLeft.position.x - tulipFenceOffset, tulipFenceY, fenceThickness, 36, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+		const tulipLeftFenceR = Bodies.rectangle(tulipLeft.position.x + tulipFenceOffset, tulipFenceY, fenceThickness, 36, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+		const tulipRightFenceL = Bodies.rectangle(tulipRight.position.x - tulipFenceOffset, tulipFenceY, fenceThickness, 36, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+		const tulipRightFenceR = Bodies.rectangle(tulipRight.position.x + tulipFenceOffset, tulipFenceY, fenceThickness, 36, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+		Composite.add(world, [leftFence, rightFence, tulipLeftFenceL, tulipLeftFenceR, tulipRightFenceL, tulipRightFenceR]);
+
 		// --- へその上に開閉する妨害フラップ（シャッター）を追加 ---
 		const flapWidth = 60;
 		const flapHeight = 8;
@@ -341,7 +383,7 @@
 
 		function dropBall() {
 			const randomX = GAME_WIDTH / 2 + globalXOffset + (Math.random() - 0.5) * 100; // ★変更点
-			const ball = Bodies.circle(randomX, 40, 7, {
+			const ball = Bodies.circle(randomX, -20, 7, {
 				label: 'ball', restitution: 0.9, friction: 0.05,
 				render: { fillStyle: '#ecf0f1' }
 			});
@@ -373,7 +415,17 @@
 		});
 
 
-		// 当たり判定
+		// ヘルパー: 上から入ったかどうかを判定
+		function isTopHit(ball, target) {
+			if (!ball || !target) return false;
+			// ボールが下向きに移動していること（閾値あり）
+			if (!ball.velocity || ball.velocity.y <= 0.2) return false;
+			// ボールの重心がターゲットの上方にあること（余裕を持たせる）
+			if (!(ball.position.y < target.position.y - 6)) return false;
+			return true;
+		}
+
+		// 当たり判定（上から入った場合のみ当たりとする）
 		Events.on(engine, 'collisionStart', (event) => {
 			event.pairs.forEach(pair => {
 				const { bodyA, bodyB } = pair;
@@ -393,16 +445,19 @@
 						Body.applyForce(ball, ball.position, { x: (dx / len) * forceScale, y: (dy / len) * forceScale + upBias });
 						break;
 					case 'startChucker':
-						handleHit(ball, '#e67e22');
-						// カウント更新（オレンジ）
-						orangeHits++;
-						updateStats();
+						// 上から入った場合のみ当たり扱いにする
+						if (isTopHit(ball, other)) {
+							handleHit(ball, '#e67e22');
+							orangeHits++;
+							updateStats();
+						}
 						break;
 					case 'tulip':
-						handleHit(ball, '#3498db');
-						// カウント更新（青）
-						blueHits++;
-						updateStats();
+						if (isTopHit(ball, other)) {
+							handleHit(ball, '#3498db');
+							blueHits++;
+							updateStats();
+						}
 						break;
 				}
 			});
