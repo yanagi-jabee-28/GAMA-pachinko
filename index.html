@@ -175,7 +175,7 @@
 		// --- 釘の森を生成 (中央揃えに調整) ---
 		const pegs = [];
 		const pegOptions = {
-			isStatic: true, label: 'peg', restitution: 0.5, friction: 0.1,
+			isStatic: true, label: 'peg', restitution: 0.8, friction: 0.05,
 			render: { fillStyle: '#bdc3c7' }
 		};
 
@@ -249,13 +249,13 @@
 		function createWindmill(cx, cy, blades = 4, radius = 70, bladeW = 8, bladeH = 60, speed = 0.06, color = '#f39c12') {
 			const parts = [];
 			// ハブ
-			const hub = Bodies.circle(cx, cy, 6, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+			const hub = Bodies.circle(cx, cy, 6, { isStatic: true, restitution: 0.8, render: { fillStyle: '#7f8c8d' } });
 			parts.push(hub);
 			for (let i = 0; i < blades; i++) {
 				const angle = (i / blades) * Math.PI * 2;
 				const bx = cx + Math.cos(angle) * (radius / 2);
 				const by = cy + Math.sin(angle) * (radius / 2);
-				const blade = Bodies.rectangle(bx, by, bladeH, bladeW, { isStatic: true, render: { fillStyle: color } });
+				const blade = Bodies.rectangle(bx, by, bladeH, bladeW, { isStatic: true, restitution: 0.8, render: { fillStyle: color } });
 				Body.setAngle(blade, angle);
 				parts.push(blade);
 			}
@@ -271,7 +271,8 @@
 		createWindmill(centerXWind + 80, 320, 4, 40, 8, 40, 0.08, '#f39c12');
 		// startChucker の真上に小さな中央風車を追加
 		// 中央風車（少し大きめに）
-		createWindmill(centerXWind, 500, 4, 40, 6, 40, 0.12, '#f39c12');
+		// 中央風車を少し上に移動
+		createWindmill(centerXWind, 470, 4, 40, 6, 40, 0.12, '#f39c12');
 		// 中央風車をマーク（最後に追加されたもの）
 		if (windmills.length) windmills[windmills.length - 1].isCenter = true;
 
@@ -280,6 +281,16 @@
 			windmills.forEach(w => {
 				Body.setAngle(w.body, w.body.angle + w.speed);
 			});
+
+			// flap を滑らかに移動
+			if (typeof flap !== 'undefined') {
+				const currentY = flap.position.y;
+				const dy = flapTargetY - currentY;
+				if (Math.abs(dy) > 0.5) {
+					const newY = currentY + dy * 0.25;
+					Body.setPosition(flap, { x: flapX, y: newY });
+				}
+			}
 		});
 
 		// へその風車の回転方向を1秒毎に逆転
@@ -302,6 +313,19 @@
 		});
 		Composite.add(world, [startChucker, tulipLeft, tulipRight]);
 
+		// --- へその上に開閉する妨害フラップ（シャッター）を追加 ---
+		const flapWidth = 60;
+		const flapHeight = 8;
+		const flapX = GAME_WIDTH / 2 + globalXOffset;
+		const flapClosedY = 540; // 閉じたとき（若干 startChucker の上）
+		const flapOpenY = 500;   // 開いたとき
+		const flap = Bodies.rectangle(flapX, flapOpenY, flapWidth, flapHeight, { isStatic: true, label: 'flap', render: { fillStyle: '#c0392b' } });
+		Composite.add(world, flap);
+		let flapTargetY = flapOpenY;
+		let flapOpen = true;
+		// toggle every 0.5s
+		setInterval(() => { flapOpen = !flapOpen; flapTargetY = flapOpen ? flapOpenY : flapClosedY; }, 500);
+
 		// --- ゲームロジック ---
 
 		// ボタンを押し続けている間、玉を落下させる
@@ -318,7 +342,7 @@
 		function dropBall() {
 			const randomX = GAME_WIDTH / 2 + globalXOffset + (Math.random() - 0.5) * 100; // ★変更点
 			const ball = Bodies.circle(randomX, 40, 7, {
-				label: 'ball', restitution: 0.5, friction: 0.1,
+				label: 'ball', restitution: 0.9, friction: 0.05,
 				render: { fillStyle: '#ecf0f1' }
 			});
 			Composite.add(world, ball);
