@@ -337,6 +337,48 @@
 		});
 		Composite.add(world, filteredExtraPegs);
 
+		// --- 左右の回転ゲート（ピンボール風） ---
+		const gates = [];
+		// より役物の上部に配置して妨害する位置にする
+		const gateY = 520; // 役物上部へ移動
+		const gateOffsetX = 44;
+		// ゲートは回転して閉じる（角度で制御）。長めにして遮りやすくする
+		// pivot をゲートの端に置くため、ボディの中心位置を pivot から半分のオフセットで計算して作成する
+		const gateLength = 60;
+		const gateHalf = gateLength / 2;
+		// left pivot
+		const leftPivot = { x: (GAME_WIDTH / 2 + globalXOffset) - gateOffsetX, y: gateY };
+		const leftCenter = { x: leftPivot.x + Math.sin(-1.0) * gateHalf, y: leftPivot.y - Math.cos(-1.0) * gateHalf };
+		const leftGate = Bodies.rectangle(leftCenter.x, leftCenter.y, 10, gateLength, { isStatic: true, label: 'gate', render: { fillStyle: '#c0392b' } });
+		Body.setAngle(leftGate, -1.0);
+		// right pivot
+		const rightPivot = { x: (GAME_WIDTH / 2 + globalXOffset) + gateOffsetX, y: gateY };
+		const rightCenter = { x: rightPivot.x + Math.sin(1.0) * gateHalf, y: rightPivot.y - Math.cos(1.0) * gateHalf };
+		const rightGate = Bodies.rectangle(rightCenter.x, rightCenter.y, 10, gateLength, { isStatic: true, label: 'gate', render: { fillStyle: '#c0392b' } });
+		Body.setAngle(rightGate, 1.0);
+		Composite.add(world, [leftGate, rightGate]);
+		// openAngle は斜め上、closedAngle はほぼ水平に近づけて入口を塞ぐ
+		// open/closed の角度を再調整して上方向に大きく開くようにする
+		const OPEN_ANGLE = 2.3;
+		const CLOSED_ANGLE = 0.3;
+		// 再配置：センター位置を OPEN_ANGLE に合わせて再計算
+		const leftCenter2 = { x: leftPivot.x + Math.sin(-OPEN_ANGLE) * gateHalf, y: leftPivot.y - Math.cos(-OPEN_ANGLE) * gateHalf };
+		Body.setPosition(leftGate, leftCenter2);
+		Body.setAngle(leftGate, -OPEN_ANGLE);
+		const rightCenter2 = { x: rightPivot.x + Math.sin(OPEN_ANGLE) * gateHalf, y: rightPivot.y - Math.cos(OPEN_ANGLE) * gateHalf };
+		Body.setPosition(rightGate, rightCenter2);
+		Body.setAngle(rightGate, OPEN_ANGLE);
+		gates.push({ body: leftGate, pivot: leftPivot, length: gateLength, targetAngle: -OPEN_ANGLE, closedAngle: -CLOSED_ANGLE, openAngle: -OPEN_ANGLE });
+		gates.push({ body: rightGate, pivot: rightPivot, length: gateLength, targetAngle: OPEN_ANGLE, closedAngle: CLOSED_ANGLE, openAngle: OPEN_ANGLE });
+
+		// toggle gates every 700ms
+		setInterval(() => {
+			gates.forEach(g => {
+				if (Math.abs(g.targetAngle - g.openAngle) < 0.01) g.targetAngle = g.closedAngle;
+				else g.targetAngle = g.openAngle;
+			});
+		}, 700);
+
 		// --- 画面中央あたりの "外れゾーン"（センサー）を追加 ---
 		// ここを通過したら玉は即時消去される
 		const missZoneWidth = 40;
@@ -368,15 +410,19 @@
 
 		// 風車を左右対称に配置
 		const centerXWind = GAME_WIDTH / 2 + globalXOffset;
+		// 中央風車を有効にするかどうか（false にすると中央風車は作られません）
+		const ENABLE_CENTER_WINDMILL = false;
 		// 直径を小さくし、回転方向を逆にする
 		createWindmill(centerXWind - 80, 320, 4, 40, 8, 40, -0.08, '#f39c12');
 		createWindmill(centerXWind + 80, 320, 4, 40, 8, 40, 0.08, '#f39c12');
 		// startChucker の真上に小さな中央風車を追加
 		// 中央風車（少し大きめに）
 		// 中央風車を少し上に移動
-		createWindmill(centerXWind, 470, 4, 40, 6, 40, 0.12, '#f39c12');
-		// 中央風車をマーク（最後に追加されたもの）
-		if (windmills.length) windmills[windmills.length - 1].isCenter = true;
+		if (ENABLE_CENTER_WINDMILL) {
+			createWindmill(centerXWind, 470, 4, 40, 6, 40, 0.12, '#f39c12');
+			// 中央風車をマーク（最後に追加されたもの）
+			if (windmills.length) windmills[windmills.length - 1].isCenter = true;
+		}
 
 		// 回転を毎フレーム適用
 		Events.on(engine, 'beforeUpdate', () => {
@@ -384,22 +430,32 @@
 				Body.setAngle(w.body, w.body.angle + w.speed);
 			});
 
-			// flap を滑らかに移動
-			if (typeof flap !== 'undefined') {
-				const currentY = flap.position.y;
-				const dy = flapTargetY - currentY;
-				if (Math.abs(dy) > 0.5) {
-					const newY = currentY + dy * 0.25;
-					Body.setPosition(flap, { x: flapX, y: newY });
-				}
+
+			// 回転ゲートの角度補間（存在する場合）
+			if (typeof gates !== 'undefined') {
+				gates.forEach(g => {
+					const ang = g.body.angle;
+					const d = g.targetAngle - ang;
+					if (Math.abs(d) > 0.001) {
+						const newAng = ang + d * 0.25;
+						// pivot を回転軸として中心位置を再計算
+						const half = g.length / 2;
+						const cx = g.pivot.x - Math.sin(newAng) * half;
+						const cy = g.pivot.y + Math.cos(newAng) * half;
+						Body.setPosition(g.body, { x: cx, y: cy });
+						Body.setAngle(g.body, newAng);
+					}
+				});
 			}
 		});
 
-		// へその風車の回転方向を1秒毎に逆転
-		setInterval(() => {
-			const cw = windmills.find(w => w.isCenter);
-			if (cw) cw.speed = -cw.speed;
-		}, 500);
+		// へその風車の回転方向を1秒毎に逆転（中央風車が有効な場合のみ）
+		if (ENABLE_CENTER_WINDMILL) {
+			setInterval(() => {
+				const cw = windmills.find(w => w.isCenter);
+				if (cw) cw.speed = -cw.speed;
+			}, 500);
+		}
 
 		// --- 役物（やくもの）の作成 ---
 		// startChucker を少し小さく下げる
@@ -431,18 +487,7 @@
 		const tulipRightFenceR = Bodies.rectangle(tulipRight.position.x + tulipFenceOffset, tulipFenceY, fenceThickness, 36, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
 		Composite.add(world, [leftFence, rightFence, tulipLeftFenceL, tulipLeftFenceR, tulipRightFenceL, tulipRightFenceR]);
 
-		// --- へその上に開閉する妨害フラップ（シャッター）を追加 ---
-		const flapWidth = 60;
-		const flapHeight = 8;
-		const flapX = GAME_WIDTH / 2 + globalXOffset;
-		const flapClosedY = 540; // 閉じたとき（若干 startChucker の上）
-		const flapOpenY = 500;   // 開いたとき
-		const flap = Bodies.rectangle(flapX, flapOpenY, flapWidth, flapHeight, { isStatic: true, label: 'flap', render: { fillStyle: '#c0392b' } });
-		Composite.add(world, flap);
-		let flapTargetY = flapOpenY;
-		let flapOpen = true;
-		// toggle every 0.5s
-		setInterval(() => { flapOpen = !flapOpen; flapTargetY = flapOpen ? flapOpenY : flapClosedY; }, 500);
+		// (以前あった flap は削除されました)
 
 		// --- ゲームロジック ---
 
