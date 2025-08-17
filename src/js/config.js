@@ -7,8 +7,8 @@
 		GUIDE_WALL_OFFSET: 200, // 壁の左右間隔（中央からの距離）
 		GUIDE_WALL_ANGLE: 0.2,
 		// Gate timings / angles
-		GATE_OPEN_MS: 300,
-		GATE_CLOSED_MS: 700,
+		GATE_OPEN_MS: 600,
+		GATE_CLOSED_MS: 400,
 		GATE_OPEN_ANGLE: 2.3,
 		GATE_CLOSED_ANGLE: 0.3,
 		// Windmills (default reversed from previous)
