@@ -121,6 +121,7 @@
 		let totalDrops = 0;
 		let orangeHits = 0; // startChucker
 		let blueHits = 0;   // tulip
+		let missHits = 0;   // ハズレ（missZone）
 
 		// 比率表示要素を作る
 		const statsEl = document.createElement('div');
@@ -202,12 +203,12 @@
 				// チューリップ上部矩形除外
 				let tooClose = false;
 				for (let rect of exclusionRects) {
-					if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(topY - rect.y) < rect.h/2) { tooClose = true; break; }
+					if (Math.abs(x - rect.x) < rect.w / 2 && Math.abs(topY - rect.y) < rect.h / 2) { tooClose = true; break; }
 				}
 				for (let pos of selectedPositions) {
 					const dx = pos.x - x;
 					const dy = pos.y - topY;
-					if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
+					if (dx * dx + dy * dy < minDist * minDist) { tooClose = true; break; }
 				}
 				if (!tooClose) { selectedPositions.push({ x, y: topY }); pegs.push(Bodies.circle(x, topY, 4, pegOptions)); }
 			}
@@ -223,12 +224,12 @@
 				const x = xOffset + col * spacing;
 				let tooClose = false;
 				for (let rect of exclusionRects) {
-					if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(topY - rect.y) < rect.h/2) { tooClose = true; break; }
+					if (Math.abs(x - rect.x) < rect.w / 2 && Math.abs(topY - rect.y) < rect.h / 2) { tooClose = true; break; }
 				}
 				for (let pos of selectedPositions) {
 					const dx = pos.x - x;
 					const dy = pos.y - topY;
-					if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
+					if (dx * dx + dy * dy < minDist * minDist) { tooClose = true; break; }
 				}
 				if (!tooClose) { selectedPositions.push({ x, y: topY }); pegs.push(Bodies.circle(x, topY, 4, pegOptions)); }
 			}
@@ -262,7 +263,7 @@
 				// チューリップ上部の矩形除外チェック
 				let skip = false;
 				for (let rect of exclusionRects) {
-					if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(y - rect.y) < rect.h/2) { skip = true; break; }
+					if (Math.abs(x - rect.x) < rect.w / 2 && Math.abs(y - rect.y) < rect.h / 2) { skip = true; break; }
 				}
 				if (skip) continue;
 				// 除外ゾーンに入る場合はスキップ
@@ -278,7 +279,7 @@
 				for (let pos of selectedPositions) {
 					const dx = pos.x - x;
 					const dy = pos.y - y;
-					if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
+					if (dx * dx + dy * dy < minDist * minDist) { tooClose = true; break; }
 				}
 				if (!tooClose) { selectedPositions.push({ x, y }); pegs.push(Bodies.circle(x, y, 4, pegOptions)); }
 			}
@@ -335,6 +336,15 @@
 			return true;
 		});
 		Composite.add(world, filteredExtraPegs);
+
+		// --- 画面中央あたりの "外れゾーン"（センサー）を追加 ---
+		// ここを通過したら玉は即時消去される
+		const missZoneWidth = 80;
+		const missZoneHeight = 12;
+		const missZone = Bodies.rectangle(GAME_WIDTH / 2 + globalXOffset, 200, missZoneWidth, missZoneHeight, {
+			isStatic: true, isSensor: true, label: 'missZone', render: { fillStyle: 'rgba(192,57,43,0.35)', strokeStyle: 'rgba(192,57,43,0.7)' }
+		});
+		Composite.add(world, missZone);
 
 		// --- 風車（回転障害）の作成: 複合ボディを回転させて玉を妨害 ---
 		const windmills = [];
@@ -450,12 +460,17 @@
 		// dropBall: optional options { fromBlue: boolean }
 		function dropBall(options = {}) {
 			const randomX = GAME_WIDTH / 2 + globalXOffset + (Math.random() - 0.5) * 100; // ★変更点
-			const color = options.fromBlue ? '#3498db' : '#ecf0f1';
+			const color = options.isNavy ? '#003f5c' : (options.fromBlue ? '#3498db' : '#ecf0f1');
 			const ball = Bodies.circle(randomX, -20, 7, {
 				label: 'ball', restitution: 0.9, friction: 0.05,
 				render: { fillStyle: color }
 			});
 			if (options.fromBlue) ball.isFromBlue = true;
+			if (options.isNavy) {
+				ball.isNavy = true;
+				ball.isImmuneToMiss = true;
+				ball.isFromBlue = true; // 紺碧も青扱い
+			}
 			Composite.add(world, ball);
 			// カウント更新（再投下は totalDrops に含めるかは設計次第だが、ここでは含める）
 			totalDrops++;
@@ -528,11 +543,29 @@
 						break;
 					case 'tulip':
 						if (isTopHit(ball, other)) {
-							// チューリップは青として扱い、球を回収して再投下する
-							handleTulipHit(ball);
-							blueHits++;
-							updateStats();
+							// チューリップ: 未青なら青化して回収→再投下
+							if (!ball.isFromBlue) {
+								handleTulipHit(ball);
+								blueHits++;
+								updateStats();
+							} else if (ball.isFromBlue && !ball.isNavy) {
+								// 既に青 -> 二度目の青当たりで紺碧化：一旦消して紺碧として再投下
+								ball.isNavy = true;
+								ball.isImmuneToMiss = true;
+								ball.render.fillStyle = '#003f5c'; // 紺碧色（表示は短時間の間）
+								try { Composite.remove(world, ball); } catch (e) {}
+								setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
+								showMessage('紺碧再投入', 1000);
+							}
 						}
+						break;
+					case 'missZone':
+						// ハズレゾーン: 免疫がある玉は無視
+						if (ball.isImmuneToMiss) { break; }
+						try { Composite.remove(world, ball); } catch (e) { }
+						missHits++;
+						updateStats();
+						showMessage('ハズレ！', 800);
 						break;
 				}
 			});
@@ -541,7 +574,7 @@
 		function updateStats() {
 			const orangeRatio = totalDrops === 0 ? 0 : Math.round((orangeHits / totalDrops) * 1000) / 10;
 			const blueRatio = totalDrops === 0 ? 0 : Math.round((blueHits / totalDrops) * 1000) / 10;
-			statsEl.textContent = `投入:${totalDrops}  オレンジ:${orangeHits}(${orangeRatio}%)  青:${blueHits}(${blueRatio}%)`;
+			statsEl.textContent = `投入:${totalDrops}  オレンジ:${orangeHits}(${orangeRatio}%)  青:${blueHits}(${blueRatio}%)  ハズレ:${missHits}`;
 		}
 
 		// 画面外に落ちた玉を消す
@@ -568,12 +601,9 @@
 			// 青として見た目を変える
 			ball.isFromBlue = true;
 			ball.render.fillStyle = '#3498db';
-			// 少し待ってから削除して再投下
-			setTimeout(() => {
-				try { Composite.remove(world, ball); } catch (e) {}
-				// 再投下は fromBlue フラグを付ける
-				dropBall({ fromBlue: true });
-			}, 200);
+			// 画面上からは即座に消す（ただし再投下の遅延は維持）
+			try { Composite.remove(world, ball); } catch (e) { }
+			setTimeout(() => { dropBall({ fromBlue: true }); }, 200);
 		}
 
 		function showMessage(text, duration = 2000) {
