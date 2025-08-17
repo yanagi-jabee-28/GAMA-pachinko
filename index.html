@@ -190,64 +190,47 @@
 		];
 		// 画面内上部に追加の釘行を挿入（画面の一番上付近）
 		// これにより、玉は上で早めに拡散されやすくなる
-		// 上段 (y = 20) — 初期から重ならないよう selectedPositions による事前チェック
+		// 上段 (y = 20) — 中央固定の位置で配置（ジッタを使わない）
 		{
 			const topY = 20;
 			const cols = 9;
 			const rowWidth = (cols - 1) * spacing;
 			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset;
-			const minDist = 12; // 少し広めに確保
-			const attempts = 8;
+			const minDist = 12; // 最小距離チェックは残す
 			for (let col = 0; col < cols; col++) {
-				const baseX = xOffset + col * spacing;
-				let placed = false;
-				for (let a = 0; a < attempts; a++) {
-					const jitterX = (Math.random() - 0.5) * 6; // +/-3px
-					const x = baseX + jitterX;
-					let tooClose = false;
-					// チューリップ上部矩形除外
-					for (let rect of exclusionRects) {
-						if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(topY - rect.y) < rect.h/2) { tooClose = true; break; }
-					}
-					for (let pos of selectedPositions) {
-						const dx = pos.x - x;
-						const dy = pos.y - topY;
-						if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
-					}
-					if (!tooClose) {
-						selectedPositions.push({ x, y: topY });
-						pegs.push(Bodies.circle(x, topY, 4, pegOptions));
-						placed = true; break;
-					}
+				const x = xOffset + col * spacing; // ジッタ無し
+				// チューリップ上部矩形除外
+				let tooClose = false;
+				for (let rect of exclusionRects) {
+					if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(topY - rect.y) < rect.h/2) { tooClose = true; break; }
 				}
-				// placed が false でもスキップして次へ（重なり回避が優先）
+				for (let pos of selectedPositions) {
+					const dx = pos.x - x;
+					const dy = pos.y - topY;
+					if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
+				}
+				if (!tooClose) { selectedPositions.push({ x, y: topY }); pegs.push(Bodies.circle(x, topY, 4, pegOptions)); }
 			}
 		}
-		// 中段 (y = 50)
+		// 中段 (y = 50) — 中央固定の位置で配置（ジッタを使わない）
 		{
 			const topY = 50;
 			const cols = 8;
 			const rowWidth = (cols - 1) * spacing;
 			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset;
 			const minDist = 12;
-			const attempts = 8;
 			for (let col = 0; col < cols; col++) {
-				const baseX = xOffset + col * spacing;
-				for (let a = 0; a < attempts; a++) {
-					const jitterX = (Math.random() - 0.5) * 6;
-					const x = baseX + jitterX;
-					let tooClose = false;
-					// チューリップ上部矩形除外
-					for (let rect of exclusionRects) {
-						if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(topY - rect.y) < rect.h/2) { tooClose = true; break; }
-					}
-					for (let pos of selectedPositions) {
-						const dx = pos.x - x;
-						const dy = pos.y - topY;
-						if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
-					}
-					if (!tooClose) { selectedPositions.push({ x, y: topY }); pegs.push(Bodies.circle(x, topY, 4, pegOptions)); break; }
+				const x = xOffset + col * spacing;
+				let tooClose = false;
+				for (let rect of exclusionRects) {
+					if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(topY - rect.y) < rect.h/2) { tooClose = true; break; }
 				}
+				for (let pos of selectedPositions) {
+					const dx = pos.x - x;
+					const dy = pos.y - topY;
+					if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
+				}
+				if (!tooClose) { selectedPositions.push({ x, y: topY }); pegs.push(Bodies.circle(x, topY, 4, pegOptions)); }
 			}
 		}
 
@@ -271,52 +254,33 @@
 			const rowWidth = (cols - 1) * spacing;
 			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset; // 中央揃え
 
-			// 左右対称を保つため、ジッタは行内で鏡像にする
-			const jitterMap = new Array(cols).fill(0);
-			const half = Math.floor(cols / 2);
-			for (let c = 0; c < cols; c++) {
-				if (c < half) {
-					jitterMap[c] = (Math.random() - 0.5) * 6; // 左側ランダム
-				} else if (cols % 2 === 1 && c === half) {
-					jitterMap[c] = 0; // 中央はジッタなしで左右対称
-				} else {
-					jitterMap[c] = -jitterMap[cols - 1 - c]; // 鏡像
-				}
-			}
+			// ジッタを使わずに中央揃えで配置（左右対称性は xOffset と cols により保たれる）
+			const minDist = 12;
 			for (let col = 0; col < cols; col++) {
-				// 軽いジッタで完全な格子を崩し、ボールの噛み合いを減らす（左右対称）
-				const jitterX = jitterMap[col];
-				const baseX = xOffset + col * spacing;
-				const minDist = 12;
-				const attempts = 8;
+				const x = xOffset + col * spacing;
 
-				for (let a = 0; a < attempts; a++) {
-					const jitter = jitterX * (1 - a / attempts) + (Math.random() - 0.5) * 2; // retries vary
-					const x = baseX + jitter;
-
-					// チューリップ上部の矩形除外チェック
-					let skip = false;
-					for (let rect of exclusionRects) {
-						if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(y - rect.y) < rect.h/2) { skip = true; break; }
-					}
-					if (skip) continue;
-					// 除外ゾーンに入る場合はスキップ
-					for (let z of exclusionZones) {
-						const dx = x - z.x;
-						const dy = y - z.y;
-						if (dx * dx + dy * dy < z.r * z.r) { skip = true; break; }
-					}
-					if (skip) continue;
-
-					// selectedPositions で衝突チェック
-					let tooClose = false;
-					for (let pos of selectedPositions) {
-						const dx = pos.x - x;
-						const dy = pos.y - y;
-						if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
-					}
-					if (!tooClose) { selectedPositions.push({ x, y }); pegs.push(Bodies.circle(x, y, 4, pegOptions)); break; }
+				// チューリップ上部の矩形除外チェック
+				let skip = false;
+				for (let rect of exclusionRects) {
+					if (Math.abs(x - rect.x) < rect.w/2 && Math.abs(y - rect.y) < rect.h/2) { skip = true; break; }
 				}
+				if (skip) continue;
+				// 除外ゾーンに入る場合はスキップ
+				for (let z of exclusionZones) {
+					const dx = x - z.x;
+					const dy = y - z.y;
+					if (dx * dx + dy * dy < z.r * z.r) { skip = true; break; }
+				}
+				if (skip) continue;
+
+				// selectedPositions で衝突チェック
+				let tooClose = false;
+				for (let pos of selectedPositions) {
+					const dx = pos.x - x;
+					const dy = pos.y - y;
+					if (dx*dx + dy*dy < minDist*minDist) { tooClose = true; break; }
+				}
+				if (!tooClose) { selectedPositions.push({ x, y }); pegs.push(Bodies.circle(x, y, 4, pegOptions)); }
 			}
 		}
 		Composite.add(world, pegs);
