@@ -449,7 +449,7 @@
 		// ボタンを押し続けている間、玉を落下させる
 		function startDropping() {
 			if (dropInterval) return;
-			dropInterval = setInterval(dropBall, 100);
+			dropInterval = setInterval(dropBall, 80);
 		}
 
 		function stopDropping() {
@@ -461,7 +461,7 @@
 		function dropBall(options = {}) {
 			const randomX = GAME_WIDTH / 2 + globalXOffset + (Math.random() - 0.5) * 100; // ★変更点
 			const color = options.isNavy ? '#ffd700' : (options.fromBlue ? '#3498db' : '#ecf0f1');
-			const ball = Bodies.circle(randomX, -20, 7, {
+			const ball = Bodies.circle(randomX, -20, 5, {
 				label: 'ball', restitution: 0.9, friction: 0.05,
 				render: { fillStyle: color }
 			});
