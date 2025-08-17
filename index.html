@@ -122,7 +122,6 @@
 		const GAME_WIDTH = 450;
 		const GAME_HEIGHT = 700;
 		const ENABLE_WALL_MISS = true; // ★追加: 壁に当たった時にハズレにするかどうかのフラグ
-		const globalXOffset = -5; // ★変更点: 全体を左に寄せるためのオフセット
 		let dropInterval = null;
 
 		// --- UI要素の取得 ---
@@ -151,7 +150,7 @@
 
 		// --- Matter.js エンジンの初期化 ---
 		const engine = Engine.create({
-			gravity: { y: 0.6 }
+			gravity: { y: (window.CONFIG && window.CONFIG.GRAVITY_Y) ?? 0.6 }
 		});
 		const world = engine.world;
 
@@ -176,12 +175,13 @@
 			Bodies.rectangle(0, GAME_HEIGHT / 2, 20, GAME_HEIGHT, wallOptions)      // 左
 		]);
 
-		// 左右の壁を左右対称に再配置
-		// 調整: 端の釘（最外列）にぴったり付くように内側へ寄せる
-		const guideWallOffset = 30;
+		// 左右の壁を左右対称に再配置（中央基準）
+		const guideWallOffset = (window.CONFIG && window.CONFIG.GUIDE_WALL_OFFSET) || 30;
+		const guideAngle = (window.CONFIG && window.CONFIG.GUIDE_WALL_ANGLE) || 0.2;
+		const centerX0 = GAME_WIDTH / 2; // 純粋な中央基準
 		Composite.add(world, [
-			Bodies.rectangle(guideWallOffset + globalXOffset, 450, 10, 500, { isStatic: true, angle: -0.2, render: { fillStyle: '#95a5a6' }, label: 'wall' }), // ★変更点: labelを追加
-			Bodies.rectangle(GAME_WIDTH - guideWallOffset + globalXOffset, 450, 10, 500, { isStatic: true, angle: 0.2, render: { fillStyle: '#95a5a6' }, label: 'wall' })  // ★変更点: labelを追加
+			Bodies.rectangle(centerX0 - guideWallOffset, 450, 10, 500, { isStatic: true, angle: -guideAngle, render: { fillStyle: '#95a5a6' }, label: 'wall' }),
+			Bodies.rectangle(centerX0 + guideWallOffset, 450, 10, 500, { isStatic: true, angle: guideAngle, render: { fillStyle: '#95a5a6' }, label: 'wall' })
 		]);
 
 
@@ -194,70 +194,48 @@
 			render: { fillStyle: '#bdc3c7' }
 		};
 
-		const spacing = 35;
+		const spacing = (window.CONFIG && window.CONFIG.PEG_SPACING) || 35;
 
 		// チューリップ上部の矩形除外（釘が重なりやすい場所を広めに取り除く）
 		var exclusionRects = [
-			{ x: 120 + globalXOffset, y: 410, w: 90, h: 60 }, // 左チューリップ上
-			{ x: GAME_WIDTH - 120 + globalXOffset, y: 410, w: 90, h: 60 } // 右チューリップ上
+			{ x: 120, y: 410, w: 90, h: 60 }, // 左チューリップ上
+			{ x: GAME_WIDTH - 120, y: 410, w: 90, h: 60 } // 右チューリップ上
 		];
-		// 画面内上部に追加の釘行を挿入（画面の一番上付近）
-		// これにより、玉は上で早めに拡散されやすくなる
-		// 上段 (y = 20) — 中央固定の位置で配置（ジッタを使わない）
+		// 画面内上部に追加の釘行（CONFIG.TOP_ROW_YS）
 		{
-			const topY = 20;
-			const cols = 9;
-			const rowWidth = (cols - 1) * spacing;
-			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset;
-			const minDist = 12; // 最小距離チェックは残す
-			for (let col = 0; col < cols; col++) {
-				const x = xOffset + col * spacing; // ジッタ無し
-				// チューリップ上部矩形除外
-				let tooClose = false;
-				for (let rect of exclusionRects) {
-					if (Math.abs(x - rect.x) < rect.w / 2 && Math.abs(topY - rect.y) < rect.h / 2) { tooClose = true; break; }
-				}
-				for (let pos of selectedPositions) {
-					const dx = pos.x - x;
-					const dy = pos.y - topY;
-					if (dx * dx + dy * dy < minDist * minDist) { tooClose = true; break; }
-				}
-				if (!tooClose) { selectedPositions.push({ x, y: topY }); pegs.push(Bodies.circle(x, topY, 4, pegOptions)); }
-			}
-		}
-		// 中段 (y = 50) — 中央固定の位置で配置（ジッタを使わない）
-		{
-			const topY = 50;
-			const cols = 8;
-			const rowWidth = (cols - 1) * spacing;
-			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset;
+			const topRows = (window.CONFIG && window.CONFIG.TOP_ROW_YS) || [20, 50];
 			const minDist = 12;
-			for (let col = 0; col < cols; col++) {
-				const x = xOffset + col * spacing;
-				let tooClose = false;
-				for (let rect of exclusionRects) {
-					if (Math.abs(x - rect.x) < rect.w / 2 && Math.abs(topY - rect.y) < rect.h / 2) { tooClose = true; break; }
+			topRows.forEach((topY, idx) => {
+				const cols = (idx % 2 === 0) ? 9 : 8; // 交互に列数を変えて中央揃え
+				const rowWidth = (cols - 1) * spacing;
+				const xOffset = (GAME_WIDTH - rowWidth) / 2;
+				for (let col = 0; col < cols; col++) {
+					const x = xOffset + col * spacing; // ジッタ無し
+					let tooClose = false;
+					for (let rect of exclusionRects) {
+						if (Math.abs(x - rect.x) < rect.w / 2 && Math.abs(topY - rect.y) < rect.h / 2) { tooClose = true; break; }
+					}
+					for (let pos of selectedPositions) {
+						const dx = pos.x - x;
+						const dy = pos.y - topY;
+						if (dx * dx + dy * dy < minDist * minDist) { tooClose = true; break; }
+					}
+					if (!tooClose) { selectedPositions.push({ x, y: topY }); pegs.push(Bodies.circle(x, topY, 4, pegOptions)); }
 				}
-				for (let pos of selectedPositions) {
-					const dx = pos.x - x;
-					const dy = pos.y - topY;
-					if (dx * dx + dy * dy < minDist * minDist) { tooClose = true; break; }
-				}
-				if (!tooClose) { selectedPositions.push({ x, y: topY }); pegs.push(Bodies.circle(x, topY, 4, pegOptions)); }
-			}
+			});
 		}
 
-		const rows = 18;
+		const rows = (window.CONFIG && window.CONFIG.PEG_ROWS) || 18;
 
 		// スタックしやすい領域（風車・へそ・チューリップ周辺）は釘を減らす / ジッタを入れる
-		const cx = GAME_WIDTH / 2 + globalXOffset;
+		const cx = GAME_WIDTH / 2;
 		const exclusionZones = [
 			{ x: cx, y: 320, r: 70 }, // 中央風車周辺
 			{ x: cx - 80, y: 320, r: 50 }, // 左風車
 			{ x: cx + 80, y: 320, r: 50 }, // 右風車
 			{ x: cx, y: 580, r: 60 }, // startChucker 上（半径拡大）
-			{ x: 120 + globalXOffset, y: 450, r: 48 }, // tulip left（半径拡大）
-			{ x: GAME_WIDTH - 120 + globalXOffset, y: 450, r: 48 } // tulip right（半径拡大）
+			{ x: 120, y: 450, r: 48 }, // tulip left（半径拡大）
+			{ x: GAME_WIDTH - 120, y: 450, r: 48 } // tulip right（半径拡大）
 		];
 		for (let row = 0; row < rows; row++) {
 			const y = 80 + row * 30;
@@ -265,7 +243,7 @@
 			const isEven = (row % 2 === 0);
 			const cols = isEven ? 8 : 9;
 			const rowWidth = (cols - 1) * spacing;
-			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset; // 中央揃え
+			const xOffset = (GAME_WIDTH - rowWidth) / 2; // 中央揃え
 
 			// ジッタを使わずに中央揃えで配置（左右対称性は xOffset と cols により保たれる）
 			const minDist = 12;
@@ -301,7 +279,7 @@
 		// 役物周りの追加ペグ（左右対称） - 直接入りづらくするガードを追加
 		// 中央のstartChucker上部に小さなバリアを作る
 		const extraPegs = [];
-		const centerX = GAME_WIDTH / 2 + globalXOffset;
+		const centerX = GAME_WIDTH / 2;
 		const barrierY = 540; // startChucker (y=570) の少し上
 		const barrierSpacing = 30;
 		// 中央バリア: 中央はあえて空けて通路を残す
@@ -318,8 +296,8 @@
 
 		// チューリップ周りの左右に小さなガードを置く
 		const tulipY = 430; // tulip の少し上
-		const tulipLeftX = 120 + globalXOffset;
-		const tulipRightX = GAME_WIDTH - 120 + globalXOffset;
+		const tulipLeftX = 120;
+		const tulipRightX = GAME_WIDTH - 120;
 		const tulipGuardOffset = 18;
 		extraPegs.push(Bodies.circle(tulipLeftX - tulipGuardOffset, tulipY, 5, pegOptions));
 		extraPegs.push(Bodies.circle(tulipLeftX + tulipGuardOffset, tulipY, 5, pegOptions));
@@ -359,20 +337,20 @@
 		const gateLength = 60;
 		const gateHalf = gateLength / 2;
 		// left pivot
-		const leftPivot = { x: (GAME_WIDTH / 2 + globalXOffset) - gateOffsetX, y: gateY };
+		const leftPivot = { x: (GAME_WIDTH / 2) - gateOffsetX, y: gateY };
 		const leftCenter = { x: leftPivot.x + Math.sin(-1.0) * gateHalf, y: leftPivot.y - Math.cos(-1.0) * gateHalf };
 		const leftGate = Bodies.rectangle(leftCenter.x, leftCenter.y, 10, gateLength, { isStatic: true, label: 'gate', render: { fillStyle: '#c0392b' } });
 		Body.setAngle(leftGate, -1.0);
 		// right pivot
-		const rightPivot = { x: (GAME_WIDTH / 2 + globalXOffset) + gateOffsetX, y: gateY };
+		const rightPivot = { x: (GAME_WIDTH / 2) + gateOffsetX, y: gateY };
 		const rightCenter = { x: rightPivot.x + Math.sin(1.0) * gateHalf, y: rightPivot.y - Math.cos(1.0) * gateHalf };
 		const rightGate = Bodies.rectangle(rightCenter.x, rightCenter.y, 10, gateLength, { isStatic: true, label: 'gate', render: { fillStyle: '#c0392b' } });
 		Body.setAngle(rightGate, 1.0);
 		Composite.add(world, [leftGate, rightGate]);
 		// openAngle は斜め上、closedAngle はほぼ水平に近づけて入口を塞ぐ
 		// open/closed の角度を再調整して上方向に大きく開くようにする
-		const OPEN_ANGLE = 2.3;
-		const CLOSED_ANGLE = 0.3;
+		const OPEN_ANGLE = (window.CONFIG && window.CONFIG.GATE_OPEN_ANGLE) || 2.3;
+		const CLOSED_ANGLE = (window.CONFIG && window.CONFIG.GATE_CLOSED_ANGLE) || 0.3;
 		// 再配置：センター位置を OPEN_ANGLE に合わせて再計算
 		const leftCenter2 = { x: leftPivot.x + Math.sin(-OPEN_ANGLE) * gateHalf, y: leftPivot.y - Math.cos(-OPEN_ANGLE) * gateHalf };
 		Body.setPosition(leftGate, leftCenter2);
@@ -405,7 +383,7 @@
 		// ここを通過したら玉は即時消去される
 		const missZoneWidth = 40;
 		const missZoneHeight = 5;
-		const missZone = Bodies.rectangle(GAME_WIDTH / 2 + globalXOffset, 200, missZoneWidth, missZoneHeight, {
+		const missZone = Bodies.rectangle(GAME_WIDTH / 2, 200, missZoneWidth, missZoneHeight, {
 			isStatic: true, isSensor: true, label: 'missZone', render: { fillStyle: 'rgba(192,57,43,0.35)', strokeStyle: 'rgba(192,57,43,0.7)' }
 		});
 		Composite.add(world, missZone);
@@ -430,19 +408,14 @@
 			windmills.push({ body: compound, speed });
 		}
 
-		// 風車を左右対称に配置
-		const centerXWind = GAME_WIDTH / 2 + globalXOffset;
-		// 中央風車を有効にするかどうか（false にすると中央風車は作られません）
-		const ENABLE_CENTER_WINDMILL = false;
-		// 直径を小さくし、回転方向を逆にする
-		createWindmill(centerXWind - 80, 320, 4, 40, 8, 40, -0.08, '#f39c12');
-		createWindmill(centerXWind + 80, 320, 4, 40, 8, 40, 0.08, '#f39c12');
-		// startChucker の真上に小さな中央風車を追加
-		// 中央風車（少し大きめに）
-		// 中央風車を少し上に移動
+		// 風車を左右対称に配置（設定から）。回転方向は従来と逆に。
+		const centerXWind = GAME_WIDTH / 2;
+		const WM = (window.CONFIG && window.CONFIG.WINDMILL) || {};
+		const ENABLE_CENTER_WINDMILL = (window.CONFIG && window.CONFIG.ENABLE_CENTER_WINDMILL) || false;
+		createWindmill(centerXWind - 80, 320, WM.blades || 4, WM.radius || 40, WM.bladeW || 8, WM.bladeH || 40, WM.leftSpeed || 0.08, WM.color || '#f39c12');
+		createWindmill(centerXWind + 80, 320, WM.blades || 4, WM.radius || 40, WM.bladeW || 8, WM.bladeH || 40, WM.rightSpeed || -0.08, WM.color || '#f39c12');
 		if (ENABLE_CENTER_WINDMILL) {
-			createWindmill(centerXWind, 470, 4, 40, 6, 40, 0.12, '#f39c12');
-			// 中央風車をマーク（最後に追加されたもの）
+			createWindmill(centerXWind, 470, WM.blades || 4, WM.radius || 40, 6, WM.bladeH || 40, WM.centerSpeed || -0.12, WM.color || '#f39c12');
 			if (windmills.length) windmills[windmills.length - 1].isCenter = true;
 		}
 
@@ -481,14 +454,14 @@
 
 		// --- 役物（やくもの）の作成 ---
 		// startChucker を少し小さく下げる
-		const startChucker = Bodies.rectangle(GAME_WIDTH / 2 + globalXOffset, 580, 36, 10, { // ★変更点
+		const startChucker = Bodies.rectangle(GAME_WIDTH / 2, 580, 36, 10, { // ★変更点
 			isStatic: true, isSensor: true, label: 'startChucker', render: { fillStyle: '#e67e22' }
 		});
 		// チューリップ幅を縮小
-		const tulipLeft = Bodies.rectangle(120 + globalXOffset, 450, 32, 10, { // ★変更点
+		const tulipLeft = Bodies.rectangle(120, 450, 32, 10, { // ★変更点
 			isStatic: true, isSensor: true, label: 'tulip', render: { fillStyle: '#3498db' }
 		});
-		const tulipRight = Bodies.rectangle(GAME_WIDTH - 120 + globalXOffset, 450, 32, 10, { // ★変更点
+		const tulipRight = Bodies.rectangle(GAME_WIDTH - 120, 450, 32, 10, { // ★変更点
 			isStatic: true, isSensor: true, label: 'tulip', render: { fillStyle: '#3498db' }
 		});
 		Composite.add(world, [startChucker, tulipLeft, tulipRight]);
@@ -498,8 +471,8 @@
 		const fenceThickness = 6;
 		// startChucker の左右フェンス
 		const fenceOffsetX = 26;
-		const leftFence = Bodies.rectangle((GAME_WIDTH / 2 + globalXOffset) - fenceOffsetX, 560, fenceThickness, fenceHeight, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
-		const rightFence = Bodies.rectangle((GAME_WIDTH / 2 + globalXOffset) + fenceOffsetX, 560, fenceThickness, fenceHeight, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+		const leftFence = Bodies.rectangle((GAME_WIDTH / 2) - fenceOffsetX, 560, fenceThickness, fenceHeight, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+		const rightFence = Bodies.rectangle((GAME_WIDTH / 2) + fenceOffsetX, 560, fenceThickness, fenceHeight, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
 		// チューリップ左右にもフェンス（入口の幅を限定）
 		const tulipFenceY = 450;
 		const tulipFenceOffset = 22;
@@ -549,7 +522,7 @@
 		// ボタンを押し続けている間、玉を落下させる
 		function startDropping() {
 			if (dropInterval) return;
-			dropInterval = setInterval(dropBall, 80);
+			dropInterval = setInterval(dropBall, (window.CONFIG && window.CONFIG.DROP_INTERVAL_MS) || 80);
 		}
 
 		function stopDropping() {
@@ -559,9 +532,9 @@
 
 		// dropBall: optional options { fromBlue: boolean }
 		function dropBall(options = {}) {
-			const randomX = GAME_WIDTH / 2 + globalXOffset + (Math.random() - 0.5) * 100; // ★変更点
+			const randomX = GAME_WIDTH / 2 + (Math.random() - 0.5) * 100; // ★変更点
 			const color = options.isNavy ? '#ffd700' : (options.fromBlue ? '#3498db' : '#ecf0f1');
-			const ball = Bodies.circle(randomX, -20, 5, {
+			const ball = Bodies.circle(randomX, -20, (window.CONFIG && window.CONFIG.BALL_RADIUS) || 5, {
 				label: 'ball', restitution: 0.9, friction: 0.05,
 				render: { fillStyle: color }
 			});

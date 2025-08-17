@@ -1,8 +1,35 @@
 (function () {
 	window.CONFIG = {
-		// Gate timings
+		// Physics / world
+		GRAVITY_Y: 0.6,
+		GLOBAL_X_OFFSET: 0,
+		// Walls / guides
+		GUIDE_WALL_OFFSET: 200, // 壁の左右間隔（中央からの距離）
+		GUIDE_WALL_ANGLE: 0.2,
+		// Gate timings / angles
 		GATE_OPEN_MS: 300,
 		GATE_CLOSED_MS: 700,
+		GATE_OPEN_ANGLE: 2.3,
+		GATE_CLOSED_ANGLE: 0.3,
+		// Windmills (default reversed from previous)
+		WINDMILL: {
+			leftSpeed: 0.08,
+			rightSpeed: -0.08,
+			centerSpeed: -0.12,
+			blades: 4,
+			radius: 40,
+			bladeW: 8,
+			bladeH: 40,
+			color: '#f39c12'
+		},
+		ENABLE_CENTER_WINDMILL: false,
+		// Pegs
+		PEG_SPACING: 35,
+		PEG_ROWS: 18,
+		TOP_ROW_YS: [20, 50],
+		// Balls
+		BALL_RADIUS: 5,
+		DROP_INTERVAL_MS: 80,
 		// Audio
 		MASTER_VOLUME: 0.4,
 		MUTED: false,
