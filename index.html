@@ -371,13 +371,23 @@
 		gates.push({ body: leftGate, pivot: leftPivot, length: gateLength, targetAngle: -OPEN_ANGLE, closedAngle: -CLOSED_ANGLE, openAngle: -OPEN_ANGLE });
 		gates.push({ body: rightGate, pivot: rightPivot, length: gateLength, targetAngle: OPEN_ANGLE, closedAngle: CLOSED_ANGLE, openAngle: OPEN_ANGLE });
 
-		// toggle gates every 700ms
-		setInterval(() => {
-			gates.forEach(g => {
-				if (Math.abs(g.targetAngle - g.openAngle) < 0.01) g.targetAngle = g.closedAngle;
-				else g.targetAngle = g.openAngle;
-			});
-		}, 700);
+		// asymmetric gate cycle: keep "open" time shorter than closed time
+		const GATE_OPEN_MS = 800;   // 短く開く時間（ms）
+		const GATE_CLOSED_MS = 300; // 閉じている時間（ms） (+200ms)
+		function setGatesOpen(open) {
+			gates.forEach(g => { g.targetAngle = open ? g.openAngle : g.closedAngle; });
+		}
+		function startGateCycle() {
+			// start by ensuring gates are open
+			setGatesOpen(true);
+			setTimeout(() => {
+				// close after short open period
+				setGatesOpen(false);
+				// schedule next open after closed period
+				setTimeout(startGateCycle, GATE_CLOSED_MS);
+			}, GATE_OPEN_MS);
+		}
+		startGateCycle();
 
 		// --- 画面中央あたりの "外れゾーン"（センサー）を追加 ---
 		// ここを通過したら玉は即時消去される
