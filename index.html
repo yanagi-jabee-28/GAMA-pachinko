@@ -37,6 +37,8 @@
 			/* scale the rendered canvas to the container width on small screens */
 			width: 100%;
 			height: auto;
+			/* subtle glow */
+			filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
 		}
 
 		.ui-container {
@@ -110,6 +112,8 @@
 	</div>
 
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+	<script src="src/js/config.js"></script>
+	<script src="src/js/audio.js"></script>
 	<script>
 		// --- Matter.js モジュールの準備 ---
 		const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
@@ -380,8 +384,8 @@
 		gates.push({ body: rightGate, pivot: rightPivot, length: gateLength, targetAngle: OPEN_ANGLE, closedAngle: CLOSED_ANGLE, openAngle: OPEN_ANGLE });
 
 		// asymmetric gate cycle: keep "open" time shorter than closed time
-		const GATE_OPEN_MS = 800;   // 短く開く時間（ms）
-		const GATE_CLOSED_MS = 300; // 閉じている時間（ms） (+200ms)
+		const GATE_OPEN_MS = (window.CONFIG && window.CONFIG.GATE_OPEN_MS) || 800;   // 短く開く時間（ms）
+		const GATE_CLOSED_MS = (window.CONFIG && window.CONFIG.GATE_CLOSED_MS) || 300; // 閉じている時間（ms）
 		function setGatesOpen(open) {
 			gates.forEach(g => { g.targetAngle = open ? g.openAngle : g.closedAngle; });
 		}
@@ -534,6 +538,7 @@
 			}
 
 			Composite.add(world, debris);
+			try { if (window.AudioBus) { AudioBus.sfxSimple({ freq: 200, type: 'triangle', gain: 0.15, dur: 0.04 }); } } catch(e) {}
 
 			// ★変更点: 0.2秒後に破片を消去する
 			setTimeout(() => {
@@ -637,6 +642,7 @@
 							// ★変更点: 砕ける演出を追加
 							createDebris(ball.position.x, ball.position.y, '#e67e22');
 							try { Composite.remove(world, ball); } catch (e) { }
+							try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.chucker); } } catch(e) {}
 							// 黄金として再投入する
 							setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
 						}
@@ -649,6 +655,7 @@
 							try { Composite.remove(world, ball); } catch (e) { }
 							blueHits++;
 							updateStats();
+							try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.tulip); } } catch(e) {}
 							// 再投下オプション: 既に金（isNavy）なら金で再投下
 							const opts = { fromBlue: true };
 							if (ball.isNavy) { opts.isNavy = true; }
@@ -661,6 +668,7 @@
 							break;
 						}
 						createDebris(ball.position.x, ball.position.y, ball.render.fillStyle);
+						try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.miss); } } catch(e) {}
 						try { Composite.remove(world, ball); } catch (e) { }
 						missHits++;
 						updateStats();
@@ -670,6 +678,7 @@
 						if (ball.isImmuneToMiss) { break; }
 						// ★変更点: 玉を消す代わりに砕ける演出を追加
 						createDebris(ball.position.x, ball.position.y, ball.render.fillStyle);
+						try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.miss); } } catch(e) {}
 						try { Composite.remove(world, ball); } catch (e) { }
 						missHits++;
 						updateStats();
@@ -684,13 +693,64 @@
 			statsEl.textContent = `投入:${totalDrops}  オレンジ:${orangeHits}(${orangeRatio}%)  青:${blueHits}(${blueRatio}%)  ハズレ:${missHits}`;
 		}
 
-		// 画面外に落ちた玉を消す
+		// スイープ判定で「上からの正式ヒット」を保証 + 画面外の玉を回収 + 前位置を記録
 		Events.on(engine, 'afterUpdate', () => {
-			Composite.allBodies(world).forEach(body => {
-				if (body.label === 'ball' && body.position.y > GAME_HEIGHT + 50) {
-					Composite.remove(world, body);
+			// すり抜け防止: 前フレーム位置から現在位置までの線分がターゲット上辺を跨いだかを判定
+			const targets = [
+				{ body: startChucker, type: 'startChucker' },
+				{ body: tulipLeft, type: 'tulip' },
+				{ body: tulipRight, type: 'tulip' }
+			];
+			const bodies = Composite.allBodies(world);
+			for (const b of bodies) {
+				if (b.label !== 'ball') continue;
+				if (b.isHitting) continue; // 既に処理中
+				const prev = b.lastPos || b.position;
+				const curr = b.position;
+				if ((curr.y - prev.y) <= 0.05) { b.lastPos = { x: curr.x, y: curr.y }; continue; } // 下向きでなければスキップ
+
+				for (const t of targets) {
+					const tb = t.body; if (!tb) continue;
+					const topY = tb.bounds.min.y; // 上辺Y
+					// 上辺を跨いだか（prevは上/ currは下）
+					if (prev.y < topY && curr.y >= topY) {
+						// 交点Xを線形補間で求める
+						const dy = (curr.y - prev.y) || 1e-6;
+						const tRatio = (topY - prev.y) / dy;
+						const xCross = prev.x + (curr.x - prev.x) * tRatio;
+						// 横幅判定（半径ぶんの余裕を持たせる）
+						const margin = 3;
+						const minX = tb.bounds.min.x - margin;
+						const maxX = tb.bounds.max.x + margin;
+						if (xCross >= minX && xCross <= maxX) {
+							// 正式ヒットとして処理（collisionStart と同等の分岐）
+							b.isHitting = true;
+							if (t.type === 'startChucker') {
+								orangeHits++;
+								updateStats();
+								createDebris(b.position.x, b.position.y, '#e67e22');
+								try { Composite.remove(world, b); } catch(e) {}
+								setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
+							} else { // tulip
+								blueHits++;
+								updateStats();
+								createDebris(b.position.x, b.position.y, '#3498db');
+								const opts = { fromBlue: true };
+								if (b.isNavy) opts.isNavy = true;
+								try { Composite.remove(world, b); } catch(e) {}
+								setTimeout(() => { dropBall(opts); }, 200);
+							}
+							break; // 1ターゲット処理で抜ける
+						}
+					}
 				}
-			});
+				// 画面外に落ちた玉を回収
+				if (b.position.y > GAME_HEIGHT + 50) {
+					try { Composite.remove(world, b); } catch(e) {}
+				}
+				// 前位置を記録
+				b.lastPos = { x: curr.x, y: curr.y };
+			}
 		});
 
 		// センサーにヒットした玉を色を変えてから消す演出（通常）
