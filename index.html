@@ -460,7 +460,7 @@
 		// dropBall: optional options { fromBlue: boolean }
 		function dropBall(options = {}) {
 			const randomX = GAME_WIDTH / 2 + globalXOffset + (Math.random() - 0.5) * 100; // ★変更点
-			const color = options.isNavy ? '#003f5c' : (options.fromBlue ? '#3498db' : '#ecf0f1');
+			const color = options.isNavy ? '#ffd700' : (options.fromBlue ? '#3498db' : '#ecf0f1');
 			const ball = Bodies.circle(randomX, -20, 7, {
 				label: 'ball', restitution: 0.9, friction: 0.05,
 				render: { fillStyle: color }
@@ -531,14 +531,14 @@
 					case 'startChucker':
 						// 上から入った場合のみ当たり扱いにする
 						if (isTopHit(ball, other)) {
-							// オレンジ当たりにするには元が青であることが必要
-							if (ball.isFromBlue) {
-								handleHit(ball, '#e67e22');
-								orangeHits++;
-								updateStats();
-							} else {
-								// 青化されていない場合は無効（ノーヒット扱い）
-							}
+							// 白でも青でも当たり扱いにする
+							// カウント更新
+							orangeHits++;
+							updateStats();
+							// 見た目をオレンジにして即時回収して黄金として再投入する
+							try { ball.render.fillStyle = '#e67e22'; } catch (e) {}
+							try { Composite.remove(world, ball); } catch (e) {}
+							setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
 						}
 						break;
 					case 'tulip':
@@ -552,10 +552,9 @@
 								// 既に青 -> 二度目の青当たりで紺碧化：一旦消して紺碧として再投下
 								ball.isNavy = true;
 								ball.isImmuneToMiss = true;
-								ball.render.fillStyle = '#003f5c'; // 紺碧色（表示は短時間の間）
+								ball.render.fillStyle = '#ffd700'; // 黄金色に変更
 								try { Composite.remove(world, ball); } catch (e) {}
 								setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
-								showMessage('紺碧再投入', 1000);
 							}
 						}
 						break;
@@ -565,7 +564,6 @@
 						try { Composite.remove(world, ball); } catch (e) { }
 						missHits++;
 						updateStats();
-						showMessage('ハズレ！', 800);
 						break;
 				}
 			});
