@@ -208,25 +208,40 @@
 
 		const rows = 18;
 
+		// スタックしやすい領域（風車・へそ・チューリップ周辺）は釘を減らす / ジッタを入れる
+		const cx = GAME_WIDTH / 2 + globalXOffset;
+		const exclusionZones = [
+			{ x: cx, y: 320, r: 70 }, // 中央風車周辺
+			{ x: cx - 80, y: 320, r: 50 }, // 左風車
+			{ x: cx + 80, y: 320, r: 50 }, // 右風車
+			{ x: cx, y: 580, r: 60 }, // startChucker 上（半径拡大）
+			{ x: 120 + globalXOffset, y: 450, r: 48 }, // tulip left（半径拡大）
+			{ x: GAME_WIDTH - 120 + globalXOffset, y: 450, r: 48 } // tulip right（半径拡大）
+		];
+
 		for (let row = 0; row < rows; row++) {
 			const y = 80 + row * 30;
 
-			if (row % 2 === 0) { // 偶数行 (0, 2, 4...)
-				const cols = 8;
-				const rowWidth = (cols - 1) * spacing;
-				const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset; // ★変更点
-				for (let col = 0; col < cols; col++) {
-					const x = xOffset + col * spacing;
-					pegs.push(Bodies.circle(x, y, 4, pegOptions));
+			const isEven = (row % 2 === 0);
+			const cols = isEven ? 8 : 9;
+			const rowWidth = (cols - 1) * spacing;
+			const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset; // 中央揃え
+
+			for (let col = 0; col < cols; col++) {
+				// 軽いジッタで完全な格子を崩し、ボールの噛み合いを減らす
+				const jitterX = (Math.random() - 0.5) * 6; // +/-3px
+				const x = xOffset + col * spacing + jitterX;
+
+				// 除外ゾーンに入る場合はスキップ（釘を置かない）
+				let skip = false;
+				for (let z of exclusionZones) {
+					const dx = x - z.x;
+					const dy = y - z.y;
+					if (dx * dx + dy * dy < z.r * z.r) { skip = true; break; }
 				}
-			} else { // 奇数行 (1, 3, 5...)
-				const cols = 9;
-				const rowWidth = (cols - 1) * spacing;
-				const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset; // ★変更点
-				for (let col = 0; col < cols; col++) {
-					const x = xOffset + col * spacing;
-					pegs.push(Bodies.circle(x, y, 4, pegOptions));
-				}
+				if (skip) continue;
+
+				pegs.push(Bodies.circle(x, y, 4, pegOptions));
 			}
 		}
 		Composite.add(world, pegs);
@@ -268,7 +283,19 @@
 		extraPegs.push(Bodies.circle(tulipLeftX - 70, tulipY - 8, 5, pegOptions));
 		extraPegs.push(Bodies.circle(tulipRightX + 70, tulipY - 8, 5, pegOptions));
 
-		Composite.add(world, extraPegs);
+		// extraPegs のうち、チューリップ入口近辺にスタックしやすいものは除外する
+		const filteredExtraPegs = extraPegs.filter(p => {
+			const px = p.position.x;
+			const py = p.position.y;
+			// 左チューリップ入口付近の除外矩形
+			const leftX = tulipLeftX;
+			if (px > leftX + 8 && px < leftX + 54 && py > tulipY - 10 && py < tulipY + 30) return false;
+			// 右チューリップ入口付近の除外矩形
+			const rightX = tulipRightX;
+			if (px > rightX - 54 && px < rightX - 8 && py > tulipY - 10 && py < tulipY + 30) return false;
+			return true;
+		});
+		Composite.add(world, filteredExtraPegs);
 
 		// --- 風車（回転障害）の作成: 複合ボディを回転させて玉を妨害 ---
 		const windmills = [];
@@ -381,14 +408,17 @@
 			dropInterval = null;
 		}
 
-		function dropBall() {
+		// dropBall: optional options { fromBlue: boolean }
+		function dropBall(options = {}) {
 			const randomX = GAME_WIDTH / 2 + globalXOffset + (Math.random() - 0.5) * 100; // ★変更点
+			const color = options.fromBlue ? '#3498db' : '#ecf0f1';
 			const ball = Bodies.circle(randomX, -20, 7, {
 				label: 'ball', restitution: 0.9, friction: 0.05,
-				render: { fillStyle: '#ecf0f1' }
+				render: { fillStyle: color }
 			});
+			if (options.fromBlue) ball.isFromBlue = true;
 			Composite.add(world, ball);
-			// カウント更新
+			// カウント更新（再投下は totalDrops に含めるかは設計次第だが、ここでは含める）
 			totalDrops++;
 			updateStats();
 		}
@@ -447,14 +477,20 @@
 					case 'startChucker':
 						// 上から入った場合のみ当たり扱いにする
 						if (isTopHit(ball, other)) {
-							handleHit(ball, '#e67e22');
-							orangeHits++;
-							updateStats();
+							// オレンジ当たりにするには元が青であることが必要
+							if (ball.isFromBlue) {
+								handleHit(ball, '#e67e22');
+								orangeHits++;
+								updateStats();
+							} else {
+								// 青化されていない場合は無効（ノーヒット扱い）
+							}
 						}
 						break;
 					case 'tulip':
 						if (isTopHit(ball, other)) {
-							handleHit(ball, '#3498db');
+							// チューリップは青として扱い、球を回収して再投下する
+							handleTulipHit(ball);
 							blueHits++;
 							updateStats();
 						}
@@ -478,15 +514,27 @@
 			});
 		});
 
-		// センサーにヒットした玉を色を変えてから消す演出
+		// センサーにヒットした玉を色を変えてから消す演出（通常）
 		function handleHit(ball, color) {
-			if (!ball.isHitting) {
-				ball.isHitting = true; // 多重ヒット防止
-				ball.render.fillStyle = color;
-				setTimeout(() => {
-					Composite.remove(world, ball);
-				}, 100); // すぐに消す
-			}
+			if (!ball || ball.isHitting) return;
+			ball.isHitting = true; // 多重ヒット防止
+			ball.render.fillStyle = color;
+			setTimeout(() => { Composite.remove(world, ball); }, 100);
+		}
+
+		// チューリップに入った玉: 青扱いにしてリドロップする
+		function handleTulipHit(ball) {
+			if (!ball || ball.isHitting) return;
+			ball.isHitting = true;
+			// 青として見た目を変える
+			ball.isFromBlue = true;
+			ball.render.fillStyle = '#3498db';
+			// 少し待ってから削除して再投下
+			setTimeout(() => {
+				try { Composite.remove(world, ball); } catch (e) {}
+				// 再投下は fromBlue フラグを付ける
+				dropBall({ fromBlue: true });
+			}, 200);
 		}
 
 		function showMessage(text, duration = 2000) {
