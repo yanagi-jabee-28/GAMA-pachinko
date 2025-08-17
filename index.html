@@ -560,7 +560,11 @@
 				label: 'ball', restitution: 0.9, friction: 0.05,
 				render: { fillStyle: color }
 			});
-			if (options.fromBlue) ball.isFromBlue = true;
+			if (options.fromBlue) {
+				ball.isFromBlue = true;
+				// 青球はハズレ判定を無効にする
+				ball.isImmuneToMiss = true;
+			}
 			if (options.isNavy) {
 				ball.isNavy = true;
 				ball.isImmuneToMiss = true;
