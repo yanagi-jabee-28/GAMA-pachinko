@@ -38,7 +38,7 @@
 			width: 100%;
 			height: auto;
 			/* subtle glow */
-			filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+			filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
 		}
 
 		.ui-container {
@@ -538,7 +538,7 @@
 			}
 
 			Composite.add(world, debris);
-			try { if (window.AudioBus) { AudioBus.sfxSimple({ freq: 200, type: 'triangle', gain: 0.15, dur: 0.04 }); } } catch(e) {}
+			try { if (window.AudioBus) { AudioBus.sfxSimple({ freq: 200, type: 'triangle', gain: 0.15, dur: 0.04 }); } } catch (e) { }
 
 			// ★変更点: 0.2秒後に破片を消去する
 			setTimeout(() => {
@@ -642,7 +642,7 @@
 							// ★変更点: 砕ける演出を追加
 							createDebris(ball.position.x, ball.position.y, '#e67e22');
 							try { Composite.remove(world, ball); } catch (e) { }
-							try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.chucker); } } catch(e) {}
+							try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.chucker); } } catch (e) { }
 							// 黄金として再投入する
 							setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
 						}
@@ -655,7 +655,7 @@
 							try { Composite.remove(world, ball); } catch (e) { }
 							blueHits++;
 							updateStats();
-							try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.tulip); } } catch(e) {}
+							try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.tulip); } } catch (e) { }
 							// 再投下オプション: 既に金（isNavy）なら金で再投下
 							const opts = { fromBlue: true };
 							if (ball.isNavy) { opts.isNavy = true; }
@@ -668,7 +668,7 @@
 							break;
 						}
 						createDebris(ball.position.x, ball.position.y, ball.render.fillStyle);
-						try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.miss); } } catch(e) {}
+						try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.miss); } } catch (e) { }
 						try { Composite.remove(world, ball); } catch (e) { }
 						missHits++;
 						updateStats();
@@ -678,7 +678,7 @@
 						if (ball.isImmuneToMiss) { break; }
 						// ★変更点: 玉を消す代わりに砕ける演出を追加
 						createDebris(ball.position.x, ball.position.y, ball.render.fillStyle);
-						try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.miss); } } catch(e) {}
+						try { if (window.AudioBus && window.CONFIG) { AudioBus.sfxSimple(window.CONFIG.SFX.miss); } } catch (e) { }
 						try { Composite.remove(world, ball); } catch (e) { }
 						missHits++;
 						updateStats();
@@ -729,7 +729,7 @@
 								orangeHits++;
 								updateStats();
 								createDebris(b.position.x, b.position.y, '#e67e22');
-								try { Composite.remove(world, b); } catch(e) {}
+								try { Composite.remove(world, b); } catch (e) { }
 								setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
 							} else { // tulip
 								blueHits++;
@@ -737,7 +737,7 @@
 								createDebris(b.position.x, b.position.y, '#3498db');
 								const opts = { fromBlue: true };
 								if (b.isNavy) opts.isNavy = true;
-								try { Composite.remove(world, b); } catch(e) {}
+								try { Composite.remove(world, b); } catch (e) { }
 								setTimeout(() => { dropBall(opts); }, 200);
 							}
 							break; // 1ターゲット処理で抜ける
@@ -746,7 +746,7 @@
 				}
 				// 画面外に落ちた玉を回収
 				if (b.position.y > GAME_HEIGHT + 50) {
-					try { Composite.remove(world, b); } catch(e) {}
+					try { Composite.remove(world, b); } catch (e) { }
 				}
 				// 前位置を記録
 				b.lastPos = { x: curr.x, y: curr.y };
