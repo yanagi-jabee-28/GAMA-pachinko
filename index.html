@@ -412,10 +412,14 @@
 		const centerXWind = GAME_WIDTH / 2;
 		const WM = (window.CONFIG && window.CONFIG.WINDMILL) || {};
 		const ENABLE_CENTER_WINDMILL = (window.CONFIG && window.CONFIG.ENABLE_CENTER_WINDMILL) || false;
-		createWindmill(centerXWind - 80, 320, WM.blades || 4, WM.radius || 40, WM.bladeW || 8, WM.bladeH || 40, WM.leftSpeed || 0.08, WM.color || '#f39c12');
-		createWindmill(centerXWind + 80, 320, WM.blades || 4, WM.radius || 40, WM.bladeW || 8, WM.bladeH || 40, WM.rightSpeed || -0.08, WM.color || '#f39c12');
+		const baseSpeed = (WM.baseSpeed) || 0.08;
+		const leftSpeed = baseSpeed * (WM.leftCW ? 1 : -1);
+		const rightSpeed = baseSpeed * (WM.rightCW ? 1 : -1);
+		const centerSpeed = baseSpeed * (WM.centerCW ? 1 : -1);
+		createWindmill(centerXWind - 80, 320, WM.blades || 4, WM.radius || 40, WM.bladeW || 8, WM.bladeH || 40, leftSpeed, WM.color || '#f39c12');
+		createWindmill(centerXWind + 80, 320, WM.blades || 4, WM.radius || 40, WM.bladeW || 8, WM.bladeH || 40, rightSpeed, WM.color || '#f39c12');
 		if (ENABLE_CENTER_WINDMILL) {
-			createWindmill(centerXWind, 470, WM.blades || 4, WM.radius || 40, 6, WM.bladeH || 40, WM.centerSpeed || -0.12, WM.color || '#f39c12');
+			createWindmill(centerXWind, 470, WM.blades || 4, WM.radius || 40, 6, WM.bladeH || 40, centerSpeed, WM.color || '#f39c12');
 			if (windmills.length) windmills[windmills.length - 1].isCenter = true;
 		}
 
@@ -444,13 +448,7 @@
 			}
 		});
 
-		// へその風車の回転方向を1秒毎に逆転（中央風車が有効な場合のみ）
-		if (ENABLE_CENTER_WINDMILL) {
-			setInterval(() => {
-				const cw = windmills.find(w => w.isCenter);
-				if (cw) cw.speed = -cw.speed;
-			}, 500);
-		}
+		// 中央風車の自動反転は CONFIG ベースの挙動に任せる（setInterval による自動反転を削除）
 
 		// --- 役物（やくもの）の作成 ---
 		// startChucker を少し小さく下げる

@@ -11,11 +11,12 @@
 		GATE_CLOSED_MS: 400,
 		GATE_OPEN_ANGLE: 2.3,
 		GATE_CLOSED_ANGLE: 0.3,
-		// Windmills (default reversed from previous)
+		// Windmills: base speed magnitude + boolean direction flags
 		WINDMILL: {
-			leftSpeed: 0.08,
-			rightSpeed: -0.08,
-			centerSpeed: -0.12,
+			baseSpeed: 0.08,
+			leftCW: false,   // 左風車の回転方向: true=clockwise, false=counter
+			rightCW: true,   // 右風車の回転方向
+			centerCW: true,  // 中央風車の回転方向
 			blades: 4,
 			radius: 40,
 			bladeW: 8,
