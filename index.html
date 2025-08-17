@@ -339,8 +339,8 @@
 
 		// --- 画面中央あたりの "外れゾーン"（センサー）を追加 ---
 		// ここを通過したら玉は即時消去される
-		const missZoneWidth = 80;
-		const missZoneHeight = 12;
+		const missZoneWidth = 40;
+		const missZoneHeight = 5;
 		const missZone = Bodies.rectangle(GAME_WIDTH / 2 + globalXOffset, 200, missZoneWidth, missZoneHeight, {
 			isStatic: true, isSensor: true, label: 'missZone', render: { fillStyle: 'rgba(192,57,43,0.35)', strokeStyle: 'rgba(192,57,43,0.7)' }
 		});
@@ -536,26 +536,21 @@
 							orangeHits++;
 							updateStats();
 							// 見た目をオレンジにして即時回収して黄金として再投入する
-							try { ball.render.fillStyle = '#e67e22'; } catch (e) {}
-							try { Composite.remove(world, ball); } catch (e) {}
+							try { ball.render.fillStyle = '#e67e22'; } catch (e) { }
+							try { Composite.remove(world, ball); } catch (e) { }
 							setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
 						}
 						break;
 					case 'tulip':
 						if (isTopHit(ball, other)) {
-							// チューリップ: 未青なら青化して回収→再投下
-							if (!ball.isFromBlue) {
-								handleTulipHit(ball);
-								blueHits++;
-								updateStats();
-							} else if (ball.isFromBlue && !ball.isNavy) {
-								// 既に青 -> 二度目の青当たりで紺碧化：一旦消して紺碧として再投下
-								ball.isNavy = true;
-								ball.isImmuneToMiss = true;
-								ball.render.fillStyle = '#ffd700'; // 黄金色に変更
-								try { Composite.remove(world, ball); } catch (e) {}
-								setTimeout(() => { dropBall({ fromBlue: true, isNavy: true }); }, 200);
-							}
+							// チューリップに入ったら必ず回収して再投下する
+							try { Composite.remove(world, ball); } catch (e) { }
+							blueHits++;
+							updateStats();
+							// 再投下オプション: 既に金（isNavy）なら金で再投下
+							const opts = { fromBlue: true };
+							if (ball.isNavy) { opts.isNavy = true; }
+							setTimeout(() => { dropBall(opts); }, 200);
 						}
 						break;
 					case 'missZone':
