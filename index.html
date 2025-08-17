@@ -117,6 +117,7 @@
 		// --- ゲーム設定 ---
 		const GAME_WIDTH = 450;
 		const GAME_HEIGHT = 700;
+		const ENABLE_WALL_MISS = true; // ★追加: 壁に当たった時にハズレにするかどうかのフラグ
 		const globalXOffset = -5; // ★変更点: 全体を左に寄せるためのオフセット
 		let dropInterval = null;
 
@@ -175,8 +176,8 @@
 		// 調整: 端の釘（最外列）にぴったり付くように内側へ寄せる
 		const guideWallOffset = 30;
 		Composite.add(world, [
-			Bodies.rectangle(guideWallOffset + globalXOffset, 450, 10, 500, { isStatic: true, angle: -0.2, render: { fillStyle: '#95a5a6' } }),
-			Bodies.rectangle(GAME_WIDTH - guideWallOffset + globalXOffset, 450, 10, 500, { isStatic: true, angle: 0.2, render: { fillStyle: '#95a5a6' } })
+			Bodies.rectangle(guideWallOffset + globalXOffset, 450, 10, 500, { isStatic: true, angle: -0.2, render: { fillStyle: '#95a5a6' }, label: 'wall' }), // ★変更点: labelを追加
+			Bodies.rectangle(GAME_WIDTH - guideWallOffset + globalXOffset, 450, 10, 500, { isStatic: true, angle: 0.2, render: { fillStyle: '#95a5a6' }, label: 'wall' })  // ★変更点: labelを追加
 		]);
 
 
@@ -649,6 +650,16 @@
 							if (ball.isNavy) { opts.isNavy = true; }
 							setTimeout(() => { dropBall(opts); }, 200);
 						}
+						break;
+					case 'wall':
+						// ★追加: 壁でのハズレ判定
+						if (!ENABLE_WALL_MISS || ball.isImmuneToMiss) {
+							break;
+						}
+						createDebris(ball.position.x, ball.position.y, ball.render.fillStyle);
+						try { Composite.remove(world, ball); } catch (e) { }
+						missHits++;
+						updateStats();
 						break;
 					case 'missZone':
 						// ハズレゾーン: 免疫がある玉は無視
