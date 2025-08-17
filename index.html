@@ -18,8 +18,10 @@
 
 		.game-container {
 			position: relative;
-			width: 450px;
-			height: 700px;
+			/* responsive: allow container to scale down on small screens */
+			width: min(450px, 95vw);
+			max-width: 450px;
+			height: auto;
 			background: linear-gradient(135deg, #2c3e50, #34495e);
 			border-radius: 20px;
 			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 0, 0, 0.4);
@@ -30,6 +32,9 @@
 		canvas {
 			display: block;
 			background-color: transparent;
+			/* scale the rendered canvas to the container width on small screens */
+			width: 100%;
+			height: auto;
 		}
 
 		.ui-container {
