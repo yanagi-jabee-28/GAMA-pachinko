@@ -117,6 +117,25 @@
 		const dropButton = document.getElementById('drop-button');
 		const messageBox = document.getElementById('message-box');
 
+		// 投下数 / 役物ヒット数カウンタ
+		let totalDrops = 0;
+		let orangeHits = 0; // startChucker
+		let blueHits = 0;   // tulip
+
+		// 比率表示要素を作る
+		const statsEl = document.createElement('div');
+		statsEl.style.pointerEvents = 'none';
+		statsEl.style.position = 'absolute';
+		statsEl.style.bottom = '20px';
+		statsEl.style.right = '20px';
+		statsEl.style.padding = '6px 10px';
+		statsEl.style.background = 'rgba(0,0,0,0.6)';
+		statsEl.style.color = 'white';
+		statsEl.style.borderRadius = '6px';
+		statsEl.style.fontSize = '14px';
+		statsEl.textContent = '投入:0  当たり:0  比率:0%';
+		document.querySelector('.game-container').appendChild(statsEl);
+
 		// --- Matter.js エンジンの初期化 ---
 		const engine = Engine.create({
 			gravity: { y: 0.6 }
@@ -192,8 +211,16 @@
 		const centerX = GAME_WIDTH / 2 + globalXOffset;
 		const barrierY = 540; // startChucker (y=570) の少し上
 		const barrierSpacing = 30;
+		// 中央バリア: 中央はあえて空けて通路を残す
 		for (let i = -1; i <= 1; i++) {
+			if (i === 0) continue; // 真ん中は開ける
 			extraPegs.push(Bodies.circle(centerX + i * barrierSpacing, barrierY, 5, pegOptions));
+		}
+		// 以前追加した密集バリアは強すぎたため削除（入らない問題の原因）
+		// 代わりに中央バリアを少し散らして隙間を残す
+		for (let i = -2; i <= 2; i++) {
+			if (i % 2 === 0) continue; // 間隔を空ける
+			extraPegs.push(Bodies.circle(centerX + i * (barrierSpacing / 1.5), barrierY + 10, 5, pegOptions));
 		}
 
 		// チューリップ周りの左右に小さなガードを置く
@@ -205,6 +232,15 @@
 		extraPegs.push(Bodies.circle(tulipLeftX + tulipGuardOffset, tulipY, 5, pegOptions));
 		extraPegs.push(Bodies.circle(tulipRightX - tulipGuardOffset, tulipY, 5, pegOptions));
 		extraPegs.push(Bodies.circle(tulipRightX + tulipGuardOffset, tulipY, 5, pegOptions));
+		// チューリップ周辺の追加ディフレクタ: 少し外側へ移動して入口を確保
+		const tulipUpperY = tulipY - 20;
+		extraPegs.push(Bodies.circle(tulipLeftX - 40, tulipUpperY, 5, pegOptions));
+		extraPegs.push(Bodies.circle(tulipLeftX + 40, tulipUpperY, 5, pegOptions));
+		extraPegs.push(Bodies.circle(tulipRightX - 40, tulipUpperY, 5, pegOptions));
+		extraPegs.push(Bodies.circle(tulipRightX + 40, tulipUpperY, 5, pegOptions));
+		// 外側のガードは少しだけ外側に置いて、完全に塞がない
+		extraPegs.push(Bodies.circle(tulipLeftX - 70, tulipY - 8, 5, pegOptions));
+		extraPegs.push(Bodies.circle(tulipRightX + 70, tulipY - 8, 5, pegOptions));
 
 		Composite.add(world, extraPegs);
 
@@ -234,8 +270,8 @@
 		createWindmill(centerXWind - 80, 320, 4, 40, 8, 40, -0.08, '#f39c12');
 		createWindmill(centerXWind + 80, 320, 4, 40, 8, 40, 0.08, '#f39c12');
 		// startChucker の真上に小さな中央風車を追加
-		// 中央風車（初速を速く設定）
-		createWindmill(centerXWind, 500, 4, 30, 6, 30, 0.12, '#f39c12');
+		// 中央風車（少し大きめに）
+		createWindmill(centerXWind, 500, 4, 40, 6, 40, 0.12, '#f39c12');
 		// 中央風車をマーク（最後に追加されたもの）
 		if (windmills.length) windmills[windmills.length - 1].isCenter = true;
 
@@ -253,13 +289,15 @@
 		}, 500);
 
 		// --- 役物（やくもの）の作成 ---
-		const startChucker = Bodies.rectangle(GAME_WIDTH / 2 + globalXOffset, 570, 40, 10, { // ★変更点
+		// startChucker を少し小さく下げる
+		const startChucker = Bodies.rectangle(GAME_WIDTH / 2 + globalXOffset, 580, 36, 10, { // ★変更点
 			isStatic: true, isSensor: true, label: 'startChucker', render: { fillStyle: '#e67e22' }
 		});
-		const tulipLeft = Bodies.rectangle(120 + globalXOffset, 450, 40, 10, { // ★変更点
+		// チューリップ幅を縮小
+		const tulipLeft = Bodies.rectangle(120 + globalXOffset, 450, 32, 10, { // ★変更点
 			isStatic: true, isSensor: true, label: 'tulip', render: { fillStyle: '#3498db' }
 		});
-		const tulipRight = Bodies.rectangle(GAME_WIDTH - 120 + globalXOffset, 450, 40, 10, { // ★変更点
+		const tulipRight = Bodies.rectangle(GAME_WIDTH - 120 + globalXOffset, 450, 32, 10, { // ★変更点
 			isStatic: true, isSensor: true, label: 'tulip', render: { fillStyle: '#3498db' }
 		});
 		Composite.add(world, [startChucker, tulipLeft, tulipRight]);
@@ -284,6 +322,9 @@
 				render: { fillStyle: '#ecf0f1' }
 			});
 			Composite.add(world, ball);
+			// カウント更新
+			totalDrops++;
+			updateStats();
 		}
 
 		dropButton.addEventListener('mousedown', startDropping);
@@ -291,6 +332,21 @@
 		dropButton.addEventListener('mouseleave', stopDropping);
 		dropButton.addEventListener('touchstart', (e) => { e.preventDefault(); startDropping(); });
 		dropButton.addEventListener('touchend', (e) => { e.preventDefault(); stopDropping(); });
+
+		// スペースキーで玉を投下（押下で開始、離して停止）
+		let spaceDown = false;
+		window.addEventListener('keydown', (e) => {
+			if (e.code === 'Space') {
+				e.preventDefault();
+				if (!spaceDown) { spaceDown = true; startDropping(); }
+			}
+		});
+		window.addEventListener('keyup', (e) => {
+			if (e.code === 'Space') {
+				e.preventDefault();
+				spaceDown = false; stopDropping();
+			}
+		});
 
 
 		// 当たり判定
@@ -303,15 +359,36 @@
 				else return;
 
 				switch (other.label) {
+					case 'windmill':
+						// 風車に当たったら強く弾く
+						const dx = ball.position.x - other.position.x;
+						const dy = ball.position.y - other.position.y;
+						const len = Math.sqrt(dx * dx + dy * dy) || 1;
+						const forceScale = 0.2; // 調整値: 力の大きさ（増加）
+						const upBias = -0.04; // 上向きバイアスでふっとばし感を強める
+						Body.applyForce(ball, ball.position, { x: (dx / len) * forceScale, y: (dy / len) * forceScale + upBias });
+						break;
 					case 'startChucker':
 						handleHit(ball, '#e67e22');
+						// カウント更新（オレンジ）
+						orangeHits++;
+						updateStats();
 						break;
 					case 'tulip':
 						handleHit(ball, '#3498db');
+						// カウント更新（青）
+						blueHits++;
+						updateStats();
 						break;
 				}
 			});
 		});
+
+		function updateStats() {
+			const orangeRatio = totalDrops === 0 ? 0 : Math.round((orangeHits / totalDrops) * 1000) / 10;
+			const blueRatio = totalDrops === 0 ? 0 : Math.round((blueHits / totalDrops) * 1000) / 10;
+			statsEl.textContent = `投入:${totalDrops}  オレンジ:${orangeHits}(${orangeRatio}%)  青:${blueHits}(${blueRatio}%)`;
+		}
 
 		// 画面外に落ちた玉を消す
 		Events.on(engine, 'afterUpdate', () => {
