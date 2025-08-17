@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Matter.js パチンコシミュレーター</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style>
+		body {
+			margin: 0;
+			overflow: hidden;
+			background-color: #1a1a1a;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			font-family: 'Helvetica Neue', sans-serif;
+		}
+
+		.game-container {
+			position: relative;
+			width: 450px;
+			height: 700px;
+			background: linear-gradient(135deg, #2c3e50, #34495e);
+			border-radius: 20px;
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(0, 0, 0, 0.4);
+			border: 5px solid #bdc3c7;
+			overflow: hidden;
+		}
+
+		canvas {
+			display: block;
+			background-color: transparent;
+		}
+
+		.ui-container {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 100%;
+			pointer-events: none;
+			/* UIが物理演算の邪魔をしないように */
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			/* Align items to the bottom */
+			align-items: center;
+			padding: 20px;
+			box-sizing: border-box;
+		}
+
+		.message-box {
+			position: absolute;
+			top: 20px;
+			background-color: rgba(0, 0, 0, 0.7);
+			color: #f1c40f;
+			padding: 10px 15px;
+			border-radius: 8px;
+			font-size: 18px;
+			font-weight: bold;
+			border: 2px solid #f1c40f;
+			visibility: hidden;
+			/* Initially hidden */
+		}
+
+		#drop-button {
+			pointer-events: all;
+			/* ボタンだけクリックできるように */
+			padding: 15px 40px;
+			font-size: 20px;
+			font-weight: bold;
+			color: white;
+			background: linear-gradient(145deg, #2980b9, #3498db);
+			border: none;
+			border-radius: 50px;
+			cursor: pointer;
+			box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+			transition: all 0.2s ease;
+			margin-bottom: 10px;
+			user-select: none;
+			/* ボタンのテキストを選択できないように */
+		}
+
+		#drop-button:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+		}
+
+		#drop-button:active {
+			transform: translateY(1px) scale(0.98);
+			box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+		}
+	</style>
+</head>
+
+<body>
+	<div class="game-container">
+		<canvas id="pachinko-canvas"></canvas>
+		<div class="ui-container">
+			<div class="message-box" id="message-box">メッセージ</div>
+			<button id="drop-button">落下</button>
+		</div>
+	</div>
+
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+	<script>
+		// --- Matter.js モジュールの準備 ---
+		const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
+
+		// --- ゲーム設定 ---
+		const GAME_WIDTH = 450;
+		const GAME_HEIGHT = 700;
+		const globalXOffset = -5; // ★変更点: 全体を左に寄せるためのオフセット
+		let dropInterval = null;
+
+		// --- UI要素の取得 ---
+		const dropButton = document.getElementById('drop-button');
+		const messageBox = document.getElementById('message-box');
+
+		// --- Matter.js エンジンの初期化 ---
+		const engine = Engine.create({
+			gravity: { y: 0.6 }
+		});
+		const world = engine.world;
+
+		const render = Render.create({
+			canvas: document.getElementById('pachinko-canvas'),
+			engine: engine,
+			options: {
+				width: GAME_WIDTH,
+				height: GAME_HEIGHT,
+				wireframes: false,
+				background: 'transparent'
+			}
+		});
+		Render.run(render);
+		const runner = Runner.create();
+		Runner.run(runner, engine);
+
+		// --- 壁の作成（床なし） ---
+		const wallOptions = { isStatic: true, render: { visible: false } };
+		Composite.add(world, [
+			Bodies.rectangle(GAME_WIDTH, GAME_HEIGHT / 2, 20, GAME_HEIGHT, wallOptions), // 右
+			Bodies.rectangle(0, GAME_HEIGHT / 2, 20, GAME_HEIGHT, wallOptions)      // 左
+		]);
+
+		// 左右の壁を左右対称に再配置
+		// 調整: 端の釘（最外列）にぴったり付くように内側へ寄せる
+		const guideWallOffset = 30;
+		Composite.add(world, [
+			Bodies.rectangle(guideWallOffset + globalXOffset, 450, 10, 500, { isStatic: true, angle: -0.2, render: { fillStyle: '#95a5a6' } }),
+			Bodies.rectangle(GAME_WIDTH - guideWallOffset + globalXOffset, 450, 10, 500, { isStatic: true, angle: 0.2, render: { fillStyle: '#95a5a6' } })
+		]);
+
+
+		// --- 釘の森を生成 (中央揃えに調整) ---
+		const pegs = [];
+		const pegOptions = {
+			isStatic: true, label: 'peg', restitution: 0.5, friction: 0.1,
+			render: { fillStyle: '#bdc3c7' }
+		};
+
+		const rows = 18;
+		const spacing = 35;
+
+		for (let row = 0; row < rows; row++) {
+			const y = 80 + row * 30;
+
+			if (row % 2 === 0) { // 偶数行 (0, 2, 4...)
+				const cols = 8;
+				const rowWidth = (cols - 1) * spacing;
+				const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset; // ★変更点
+				for (let col = 0; col < cols; col++) {
+					const x = xOffset + col * spacing;
+					pegs.push(Bodies.circle(x, y, 4, pegOptions));
+				}
+			} else { // 奇数行 (1, 3, 5...)
+				const cols = 9;
+				const rowWidth = (cols - 1) * spacing;
+				const xOffset = (GAME_WIDTH - rowWidth) / 2 + globalXOffset; // ★変更点
+				for (let col = 0; col < cols; col++) {
+					const x = xOffset + col * spacing;
+					pegs.push(Bodies.circle(x, y, 4, pegOptions));
+				}
+			}
+		}
+		Composite.add(world, pegs);
+
+		// 役物周りの追加ペグ（左右対称） - 直接入りづらくするガードを追加
+		// 中央のstartChucker上部に小さなバリアを作る
+		const extraPegs = [];
+		const centerX = GAME_WIDTH / 2 + globalXOffset;
+		const barrierY = 540; // startChucker (y=570) の少し上
+		const barrierSpacing = 30;
+		for (let i = -1; i <= 1; i++) {
+			extraPegs.push(Bodies.circle(centerX + i * barrierSpacing, barrierY, 5, pegOptions));
+		}
+
+		// チューリップ周りの左右に小さなガードを置く
+		const tulipY = 430; // tulip の少し上
+		const tulipLeftX = 120 + globalXOffset;
+		const tulipRightX = GAME_WIDTH - 120 + globalXOffset;
+		const tulipGuardOffset = 18;
+		extraPegs.push(Bodies.circle(tulipLeftX - tulipGuardOffset, tulipY, 5, pegOptions));
+		extraPegs.push(Bodies.circle(tulipLeftX + tulipGuardOffset, tulipY, 5, pegOptions));
+		extraPegs.push(Bodies.circle(tulipRightX - tulipGuardOffset, tulipY, 5, pegOptions));
+		extraPegs.push(Bodies.circle(tulipRightX + tulipGuardOffset, tulipY, 5, pegOptions));
+
+		Composite.add(world, extraPegs);
+
+		// --- 風車（回転障害）の作成: 複合ボディを回転させて玉を妨害 ---
+		const windmills = [];
+		function createWindmill(cx, cy, blades = 4, radius = 70, bladeW = 8, bladeH = 60, speed = 0.06, color = '#f39c12') {
+			const parts = [];
+			// ハブ
+			const hub = Bodies.circle(cx, cy, 6, { isStatic: true, render: { fillStyle: '#7f8c8d' } });
+			parts.push(hub);
+			for (let i = 0; i < blades; i++) {
+				const angle = (i / blades) * Math.PI * 2;
+				const bx = cx + Math.cos(angle) * (radius / 2);
+				const by = cy + Math.sin(angle) * (radius / 2);
+				const blade = Bodies.rectangle(bx, by, bladeH, bladeW, { isStatic: true, render: { fillStyle: color } });
+				Body.setAngle(blade, angle);
+				parts.push(blade);
+			}
+			const compound = Body.create({ parts: parts, isStatic: true, label: 'windmill' });
+			Composite.add(world, compound);
+			windmills.push({ body: compound, speed });
+		}
+
+		// 風車を左右対称に配置
+		const centerXWind = GAME_WIDTH / 2 + globalXOffset;
+		// 直径を小さくし、回転方向を逆にする
+		createWindmill(centerXWind - 80, 320, 4, 40, 8, 40, -0.08, '#f39c12');
+		createWindmill(centerXWind + 80, 320, 4, 40, 8, 40, 0.08, '#f39c12');
+		// startChucker の真上に小さな中央風車を追加
+		// 中央風車（初速を速く設定）
+		createWindmill(centerXWind, 500, 4, 30, 6, 30, 0.12, '#f39c12');
+		// 中央風車をマーク（最後に追加されたもの）
+		if (windmills.length) windmills[windmills.length - 1].isCenter = true;
+
+		// 回転を毎フレーム適用
+		Events.on(engine, 'beforeUpdate', () => {
+			windmills.forEach(w => {
+				Body.setAngle(w.body, w.body.angle + w.speed);
+			});
+		});
+
+		// へその風車の回転方向を1秒毎に逆転
+		setInterval(() => {
+			const cw = windmills.find(w => w.isCenter);
+			if (cw) cw.speed = -cw.speed;
+		}, 500);
+
+		// --- 役物（やくもの）の作成 ---
+		const startChucker = Bodies.rectangle(GAME_WIDTH / 2 + globalXOffset, 570, 40, 10, { // ★変更点
+			isStatic: true, isSensor: true, label: 'startChucker', render: { fillStyle: '#e67e22' }
+		});
+		const tulipLeft = Bodies.rectangle(120 + globalXOffset, 450, 40, 10, { // ★変更点
+			isStatic: true, isSensor: true, label: 'tulip', render: { fillStyle: '#3498db' }
+		});
+		const tulipRight = Bodies.rectangle(GAME_WIDTH - 120 + globalXOffset, 450, 40, 10, { // ★変更点
+			isStatic: true, isSensor: true, label: 'tulip', render: { fillStyle: '#3498db' }
+		});
+		Composite.add(world, [startChucker, tulipLeft, tulipRight]);
+
+		// --- ゲームロジック ---
+
+		// ボタンを押し続けている間、玉を落下させる
+		function startDropping() {
+			if (dropInterval) return;
+			dropInterval = setInterval(dropBall, 100);
+		}
+
+		function stopDropping() {
+			clearInterval(dropInterval);
+			dropInterval = null;
+		}
+
+		function dropBall() {
+			const randomX = GAME_WIDTH / 2 + globalXOffset + (Math.random() - 0.5) * 100; // ★変更点
+			const ball = Bodies.circle(randomX, 40, 7, {
+				label: 'ball', restitution: 0.5, friction: 0.1,
+				render: { fillStyle: '#ecf0f1' }
+			});
+			Composite.add(world, ball);
+		}
+
+		dropButton.addEventListener('mousedown', startDropping);
+		dropButton.addEventListener('mouseup', stopDropping);
+		dropButton.addEventListener('mouseleave', stopDropping);
+		dropButton.addEventListener('touchstart', (e) => { e.preventDefault(); startDropping(); });
+		dropButton.addEventListener('touchend', (e) => { e.preventDefault(); stopDropping(); });
+
+
+		// 当たり判定
+		Events.on(engine, 'collisionStart', (event) => {
+			event.pairs.forEach(pair => {
+				const { bodyA, bodyB } = pair;
+				let ball, other;
+				if (bodyA.label === 'ball') { ball = bodyA; other = bodyB; }
+				else if (bodyB.label === 'ball') { ball = bodyB; other = bodyA; }
+				else return;
+
+				switch (other.label) {
+					case 'startChucker':
+						handleHit(ball, '#e67e22');
+						break;
+					case 'tulip':
+						handleHit(ball, '#3498db');
+						break;
+				}
+			});
+		});
+
+		// 画面外に落ちた玉を消す
+		Events.on(engine, 'afterUpdate', () => {
+			Composite.allBodies(world).forEach(body => {
+				if (body.label === 'ball' && body.position.y > GAME_HEIGHT + 50) {
+					Composite.remove(world, body);
+				}
+			});
+		});
+
+		// センサーにヒットした玉を色を変えてから消す演出
+		function handleHit(ball, color) {
+			if (!ball.isHitting) {
+				ball.isHitting = true; // 多重ヒット防止
+				ball.render.fillStyle = color;
+				setTimeout(() => {
+					Composite.remove(world, ball);
+				}, 100); // すぐに消す
+			}
+		}
+
+		function showMessage(text, duration = 2000) {
+			messageBox.textContent = text;
+			messageBox.style.visibility = 'visible';
+			setTimeout(() => { messageBox.style.visibility = 'hidden'; }, duration);
+		}
+	</script>
+</body>
+
+</html>
